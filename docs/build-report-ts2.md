@@ -502,7 +502,7 @@ same-crew and error-order fixes are ts1's, and join by typed reference is approv
   **144 of 144.** The first full run found the join-panel bug above (141 passed, 3 failed). Every screenshot was re-shot in that final
   run.
 - **All seven app negative controls on 8506**, on the final code. Each unbroken copy passed and each broken copy went red. The log
-  entries are at `app/tests/negative-control.log` lines 841–1160: boundary, statusleak, overlay, metoo, attribution, overdue,
+  entries are at `app/tests/negative-control.log` lines 841–1157: boundary, statusleak, overlay, metoo, attribution, overdue,
   notestale. There are no machine paths in the log. `npm run negative` now runs all seven.
 - **I looked at:** the 1280 detail before and after (chromium, and the WebKit after), the 390 detail with "Due Wed Sep 23", and the
   1280 join confirm.
