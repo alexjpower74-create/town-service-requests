@@ -46,5 +46,10 @@ touched, and is gated on printed `*_EXIT=` lines.
 - ts2 M2 real-Worker screenshots (staff board 1280, detail 390, join confirm 1280): overdue edges and counts right, `tel:` contact,
   inline join confirm. **Polish for ts2 after M3:** at 1280 with the detail panel open the five board columns get cramped
   ("In progress" wraps, cards three words wide).
+- ts2 M3 screenshots from main at `8350c8d` (staff map 1280, weekly report 1280, settings WebKit 390): clusters, status legend,
+  overdue ring, boundary and attribution on the map; report table, "joined reports are left out", oldest open with overdue lines;
+  settings with blank-for-no-target SLA boxes, crews, PIN change. **Polish for the final round:** (a) averages print as "2" where the
+  others print "2.1": show one decimal always ("2.0"); (b) at 390 the staff top bar wraps onto two lines (Board / Map / Weekly report,
+  then Settings / Sign out).
 - `npm run demo` from main at `fb199ec` on a spare port (8507): migrations, wrangler, seed of 24 SAMPLE requests, links printed;
   `/`, `/s/`, `/staff/`, `/api/town` all 200; a printed status link returns HP-1001 with no private fields. Stopped after.
