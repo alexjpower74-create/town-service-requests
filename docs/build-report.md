@@ -74,6 +74,14 @@ touched, and is gated on printed `*_EXIT=` lines.
 - `npm run demo` from main at `fb199ec` on a spare port (8507): migrations, wrangler, seed of 24 SAMPLE requests, links printed;
   `/`, `/s/`, `/staff/`, `/api/town` all 200; a printed status link returns HP-1001 with no private fields. Stopped after.
 
+## Demo left running for Alexander
+
+Started detached from main at `3d5a997` with exactly the README's command (`setsid nohup npm run demo > .logs/demo.log`), from a clean
+state: migrations applied, 24 SAMPLE requests seeded, links written to `.logs/demo-links.txt`. Checked with curl: `/`, `/s/`,
+`/staff/` and `/api/town` answer 200; a printed status link answers 200 and its JSON carries only public fields; staff sign-in with
+PIN 3690 returns a token. The listener on 8501 is a process whose working directory is this project's `worker/`, so no other crew's
+demo was touched.
+
 ## Known gaps and v2 ideas
 
 - **One shared staff PIN.** Everyone at the town office signs in with the same PIN, so history says "Town office", not who made a change.
