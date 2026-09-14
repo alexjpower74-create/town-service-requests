@@ -54,7 +54,7 @@ function drawBoundary(map, boundary) {
 
 // town: GET /api/town. Answers the Leaflet map.
 export function townMap(el, town, { boundary = true } = {}) {
-  const map = L.map(el, { zoomControl: true, attributionControl: true }).setView(town.center, town.zoom)
+  const map = L.map(el, { zoomControl: true, attributionControl: true, maxZoom: 19 }).setView(town.center, town.zoom)
   map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank">Leaflet</a>')
   let vector = false
   if (hasWebGL() && typeof L.maplibreGL === 'function') {

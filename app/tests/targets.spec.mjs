@@ -1,7 +1,7 @@
 // Tap targets, the SAMPLE badge, no sideways scroll, colour contrast, and the map attribution.
 import {
   test, expect, tap, typeText, choosePhoto, hitTest, contrast, rgb, api, makeRequest, north, staffToken, staffPut, mergeInto,
-  signIn, openCard, statusPath, POINTS, TOWN_NAME,
+  signIn, openCard, goView, statusPath, POINTS, TOWN_NAME,
 } from './helpers.mjs'
 
 // Every visible button (and link styled as one) inside `scope`: at least 44 px each way, primary buttons at least 56 px tall,
@@ -91,6 +91,11 @@ test('no horizontal scroll at 390 on any screen @phone', async ({ page, request 
   await wide('staff board')
   await openCard(page, created.ref, 'new')
   await wide('staff detail')
+  await tap(page, page.locator('#detail-close'), 'Close')
+  for (const view of ['map', 'report', 'settings']) {
+    await goView(page, view)
+    await wide(`staff ${view}`)
+  }
 })
 
 test('status chips, the emergency banner and primary buttons meet 4.5 : 1', async ({ page, request }) => {

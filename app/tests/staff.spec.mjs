@@ -19,6 +19,29 @@ test('a wrong PIN is refused with the API message and a 401', async ({ page }) =
   await expect(page.locator('#board')).toHaveCount(0)
 })
 
+test('five wrong PINs trip the sign-in guard: the 429 text shows as is, and even the right PIN is refused', async ({ page }) => {
+  await page.goto('/staff/')
+  for (let i = 1; i <= 5; i++) {
+    await typeText(page, page.locator('#pin'), '1111', `wrong PIN ${i}`)
+    const answer = page.waitForResponse((r) => r.url().endsWith('/api/staff/signin'))
+    await tap(page, page.locator('#signin-btn'), `Sign in (wrong PIN ${i})`)
+    expect((await answer).status(), `wrong PIN ${i}`).toBe(401)
+    await expect(page.locator('#pin-error')).toHaveText('That PIN is not right.')
+    await expect(page.locator('#pin'), 'the box is emptied for the next try').toHaveValue('')
+  }
+  await typeText(page, page.locator('#pin'), '3690', 'the right PIN')
+  const answer = page.waitForResponse((r) => r.url().endsWith('/api/staff/signin'))
+  await tap(page, page.locator('#signin-btn'), 'Sign in (right PIN, after 5 wrong)')
+  const res = await answer
+  expect(res.status()).toBe(429)
+  const body = await res.json()
+  expect(body.code).toBe('rate_limited')
+  await expect(page.locator('#pin-error')).toHaveText(body.error)
+  await expect(page.locator('#pin-error')).toHaveText('Too many tries. Wait 15 minutes and try again.')
+  await expect(page.locator('#board')).toHaveCount(0)
+  await expect(page.locator('#nav')).toBeHidden()
+})
+
 test('the board counts and cards match the API, with and without a filter', async ({ page, request }) => {
   const token = await staffToken(request)
   await makeRequest(request)
