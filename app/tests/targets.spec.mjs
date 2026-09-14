@@ -162,3 +162,27 @@ test('the resident map shows the OpenFreeMap attribution with its three links', 
   }
   await expect(attribution).toContainText('Data from')
 })
+
+test('the town office top bar is one row at 390, and every item in it is at least 44 px and hit-tests to itself @phone', async ({ page }) => {
+  await signIn(page)
+  const items = page.locator('#nav a, #nav button')
+  await expect(items).toHaveCount(5)
+  const tops = await items.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)))
+  expect(new Set(tops).size, `one row (tops ${tops.join(', ')})`).toBe(1)
+  // All five fit: the row needs no sideways scroll, so Sign out is not cut off at the edge.
+  const [navScroll, navWidth] = await page.locator('#nav').evaluate((el) => [el.scrollWidth, el.clientWidth])
+  expect(navScroll, `the nav row fits in ${navWidth} px`).toBeLessThanOrEqual(navWidth)
+  const brand = await page.locator('#brand .brand').evaluate((el) => el.getBoundingClientRect().height)
+  expect(brand, 'the town name and SAMPLE fit on one line').toBeLessThan(34)
+  for (const item of await items.all()) {
+    await item.scrollIntoViewIfNeeded()
+    const name = (await item.innerText()).trim()
+    const { box, hit } = await hitTest(item)
+    expect(box.height, `${name} is at least 44 px tall`).toBeGreaterThanOrEqual(44)
+    expect(box.width, `${name} is at least 44 px wide`).toBeGreaterThanOrEqual(44)
+    expect(hit, `${name} hit-tests to itself`).toBe('')
+  }
+  const [scroll, inner] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth])
+  expect(scroll, 'no sideways page scroll').toBeLessThanOrEqual(inner)
+  for (const view of ['report', 'settings', 'map', 'board']) await goView(page, view)
+})

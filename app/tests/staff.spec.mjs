@@ -2,7 +2,7 @@
 // API's inline errors, and the stale path when someone else changed the report.
 import {
   test, expect, tap, typeText, api, staffToken, staffGet, staffList, staffPut, makeRequest, north, signIn, openCard, showColumn,
-  statusPath, recordBodies, POINTS,
+  statusPath, recordBodies, goView, POINTS,
 } from './helpers.mjs'
 
 const COLUMNS = ['new', 'assigned', 'in_progress', 'done', 'wont_fix']
@@ -228,4 +228,85 @@ test('a crew deactivated from another session is gone from the crew list when a 
   await openCard(page, created.ref, 'new')
   await expect(page.locator('#d-crew option[value="3"]')).toHaveCount(0)
   await expect(page.locator('#d-crew option')).toHaveCount(3)
+})
+
+// Page errors, leaving out the browser's own "Failed to load resource" line for a 401.
+function pageErrors(page) {
+  const errors = []
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
+  page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console: ${m.text()}`) })
+  return errors
+}
+// End this page's own session through the API (the token is read, never set).
+async function endThisSession(page, request) {
+  const token = await page.evaluate(() => localStorage.getItem('tsr:staff-token'))
+  expect((await api(request, 'POST', '/api/staff/signout', { token })).status).toBe(200)
+}
+async function signedOutBy(page, action, urlPart, label) {
+  const answer = page.waitForResponse((r) => r.url().includes(urlPart) && r.status() === 401)
+  await action()
+  await answer
+  await expect(page.locator('#pin'), `${label}: the sign-in screen`).toBeVisible()
+  await expect(page.locator('#pin-error')).toHaveText('Sign in again.')
+}
+async function signInHere(page, view) {
+  await typeText(page, page.locator('#pin'), '3690', 'PIN')
+  await tap(page, page.locator('#signin-btn'), 'Sign in')
+  await expect(page.locator('#app')).toHaveAttribute('data-view', view)
+}
+
+test('Save settings, Add crew, Change PIN and Download CSV after the session ended go to sign-in without a page error', async ({ page, request }) => {
+  const errors = pageErrors(page)
+  await signIn(page)
+  await goView(page, 'settings')
+
+  await endThisSession(page, request)
+  await signedOutBy(page, () => tap(page, page.locator('#settings-save'), 'Save settings'), '/api/staff/settings', 'Save settings')
+  await signInHere(page, 'settings')
+
+  await endThisSession(page, request)
+  await typeText(page, page.locator('#crew-new'), 'Late crew (SAMPLE)', 'new crew')
+  await signedOutBy(page, () => tap(page, page.locator('#crew-add'), 'Add crew'), '/api/staff/crews', 'Add crew')
+  await signInHere(page, 'settings')
+
+  await endThisSession(page, request)
+  await typeText(page, page.locator('#pin-current'), '3690', 'current PIN')
+  await typeText(page, page.locator('#pin-new'), '2468', 'new PIN')
+  await signedOutBy(page, () => tap(page, page.locator('#pin-save'), 'Change PIN'), '/api/staff/pin', 'Change PIN')
+  await signInHere(page, 'settings')
+
+  await goView(page, 'report')
+  await endThisSession(page, request)
+  await signedOutBy(page, () => tap(page, page.locator('#download-csv'), 'Download CSV'), '/api/staff/export.csv', 'Download CSV')
+
+  await page.waitForTimeout(500)
+  expect(errors, 'no page error once the sign-in screen shows').toEqual([])
+})
+
+test('with the detail open at 1280 the board says it scrolls sideways and fades its right edge, until the last column is in view @desktop', async ({ page, request }) => {
+  const created = await makeRequest(request)
+  await signIn(page)
+  const hint = page.locator('#board-hint')
+  const scroller = page.locator('#board-scroll')
+  const fade = () => scroller.evaluate((el) => getComputedStyle(el, '::after').backgroundImage)
+  await expect(hint, 'no hint while all five columns fit').toBeHidden()
+
+  await openCard(page, created.ref, 'new')
+  await expect(hint).toBeVisible()
+  await expect(hint).toHaveText('Scroll the board sideways for more columns.')
+  await expect(scroller).toHaveAttribute('data-more', 'true')
+  expect(await fade(), 'the right edge fades').toContain('gradient')
+  await expect(page.locator('.col[data-col="wont_fix"] h2')).not.toBeInViewport({ ratio: 1 })
+
+  // A real sideways wheel over the board brings the last column into view.
+  const box = await page.locator('#board').boundingBox()
+  await page.mouse.move(box.x + box.width / 2, box.y + 80)
+  await page.mouse.wheel(3000, 0)
+  await expect(scroller).toHaveAttribute('data-more', 'false')
+  await expect(hint).toBeHidden()
+  expect(await fade()).toBe('none')
+  await expect(page.locator('.col[data-col="wont_fix"] h2')).toBeInViewport({ ratio: 1 })
+
+  await tap(page, page.locator('#detail-close'), 'Close')
+  await expect(hint).toBeHidden()
 })

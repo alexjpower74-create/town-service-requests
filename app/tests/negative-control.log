@@ -1155,3 +1155,682 @@ RESULT red as expected (unbroken passed, broken failed)
     [chromium-1280] › tests/staff.spec.mjs:164:1 › a Save after adding a note never undoes a change made meanwhile: it answers 409 and shows the stale box 
 
 
+== 2026-09-14T21:52:03.723Z boundary: report.js treats every pin as inside the boundary (no ray casting on the phone)
+   spec: playwright test boundary.spec.mjs --project chromium-390 -g outside the boundary on 8506, copy in app/.negative/boundary
+   unbroken copy: exit 0;   ✓  1 [chromium-390] › tests/boundary.spec.mjs:14:1 › a tap outside the boundary stops at the pin step and makes no request; a tap inside goes on (2.2s) |   1 passed (6.0s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-390] › tests/boundary.spec.mjs:14:1 › a tap outside the boundary stops at the pin step and makes no request; a tap inside goes on 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('#where-label')
+    Expected: "false"
+    Received: "true"
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toHaveAttribute" locator('#where-label') with timeout 10000ms
+      - waiting for locator('#where-label')
+        5 × locator resolved to <p id="where-label" aria-live="polite" data-inside="true" class="where-label" data-lat="49.142022503974616" data-lng="-55.31993865966797"></p>
+          - unexpected value "true"
+        19 × locator resolved to <p id="where-label" aria-live="polite" data-inside="true" class="where-label" data-lat="49.142022503974616" data-lng="-55.31993865966797">Not near a named street</p>
+           - unexpected value "true"
+
+
+      17 |   await zoomOutTo(page, 12)
+      18 |   await tapLatLng(page, map, POINTS.outside_east_of_boundary, 'outside the boundary (east)')
+    > 19 |   await expect(page.locator('#where-label')).toHaveAttribute('data-inside', 'false')
+         |                                              ^
+      20 |   await expect(page.locator('#where-error')).toHaveText(OUTSIDE)
+      21 |   await expect(page.locator('#where-next')).toBeDisabled()
+      22 |   const token = await staffToken(request)
+        at <repo>/app/tests/boundary.spec.mjs:19:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/boundary/results/boundary-a-tap-outside-the-8a7e1-equest-a-tap-inside-goes-on-chromium-390/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/boundary/results/boundary-a-tap-outside-the-8a7e1-equest-a-tap-inside-goes-on-chromium-390/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/boundary/results/boundary-a-tap-outside-the-8a7e1-equest-a-tap-inside-goes-on-chromium-390/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/boundary/results/boundary-a-tap-outside-the-8a7e1-equest-a-tap-inside-goes-on-chromium-390/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-390] › tests/boundary.spec.mjs:14:1 › a tap outside the boundary stops at the pin step and makes no request; a tap inside goes on 
+
+
+== 2026-09-14T21:52:26.909Z statusleak: the Worker's GET /api/status answer carries reporter_phone
+   spec: playwright test report.spec.mjs --project chromium-390 on 8506, copy in app/.negative/statusleak
+   unbroken copy: exit 0;   ✓  1 [chromium-390] › tests/report.spec.mjs:9:1 › a resident reports a pothole with a photo, and the status page keeps their details private (2.7s) |   1 passed (6.5s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-390] › tests/report.spec.mjs:9:1 › a resident reports a pothole with a photo, and the status page keeps their details private 
+
+    Error: the response body of http://127.0.0.1:8506/api/status/g9_XCmIxdgYLfT5n1FuqcpGi never contains "709-555-0199"
+
+    expect(received).not.toContain(expected) // indexOf
+
+    Expected substring: not "709-555-0199"
+    Received string:        "{\"town\":{\"name\":\"SAMPLE Town of Harbour Pond (demo)\",\"sample\":true,\"office_phone\":\"709-555-0100\"},\"ref\":\"HP-1001\",\"category\":\"pothole\",\"category_label\":\"Pothole\",\"location_label\":\"Ivanys Lane\",\"reporter_phone\":\"709-555-0199\",\"status\":\"new\",\"status_label\":\"New\",\"public_message\":null,\"plus_ones\":0,\"reported_at\":\"2026-09-14T21:52:40.018Z\",\"reported_label\":\"Mon Sep 14, 7:22 PM\",\"updated_at\":\"2026-09-14T21:52:40.018Z\",\"updated_label\":\"Mon Sep 14, 7:22 PM\",\"closed_at\":null,\"closed_label\":null,\"merged_into\":null,\"history\":[{\"at\":\"2026-09-14T21:52:40.018Z\",\"at_label\":\"Mon Sep 14, 7:22 PM\",\"text\":\"Reported\"}]}"
+
+      56 |   for (const s of secrets) expect(text, `the status page text never shows "${s}"`).not.toContain(s)
+      57 |   for (const b of bodies) {
+    > 58 |     for (const s of secrets) expect(b.text, `the response body of ${b.url} never contains "${s}"`).not.toContain(s)
+         |                                                                                                        ^
+      59 |   }
+      60 | })
+      61 |
+        at <repo>/app/tests/report.spec.mjs:58:104
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/statusleak/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/statusleak/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/statusleak/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/statusleak/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-390] › tests/report.spec.mjs:9:1 › a resident reports a pothole with a photo, and the status page keeps their details private 
+
+
+== 2026-09-14T21:52:41.154Z overlay: a transparent element covers the Send report button
+   spec: playwright test report.spec.mjs --project chromium-390 on 8506, copy in app/.negative/overlay
+   unbroken copy: exit 0;   ✓  1 [chromium-390] › tests/report.spec.mjs:9:1 › a resident reports a pothole with a photo, and the status page keeps their details private (2.8s) |   1 passed (6.8s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-390] › tests/report.spec.mjs:9:1 › a resident reports a pothole with a photo, and the status page keeps their details private 
+
+    Error: tap(Send report) hit-test at 195,783: something else is on top
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: ""
+    Received: "<div class=\"negative-overlay\" aria-hidden=\"true\" style=\"position: absolute; inset: 0; background: transparent; z-index: 5\"></div>"
+
+       at helpers.mjs:97
+
+       95 |   await intoView(page, locator)
+       96 |   const { x, y, hit } = await hitTest(locator)
+    >  97 |   expect(hit, `tap(${label}) hit-test at ${Math.round(x)},${Math.round(y)}: something else is on top`).toBe('')
+          |                                                                                                        ^
+       98 |   if (await isTouch(page)) await page.touchscreen.tap(x, y)
+       99 |   else await page.mouse.click(x, y)
+      100 | }
+        at tap (<repo>/app/tests/helpers.mjs:97:104)
+        at <repo>/app/tests/report.spec.mjs:29:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/overlay/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/overlay/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/overlay/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/overlay/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-390] › tests/report.spec.mjs:9:1 › a resident reports a pothole with a photo, and the status page keeps their details private 
+
+
+== 2026-09-14T21:52:54.702Z metoo: Me too creates a new request instead of calling me-too
+   spec: playwright test nearby.spec.mjs --project chromium-390 on 8506, copy in app/.negative/metoo
+   unbroken copy: exit 0;   ✓  1 [chromium-390] › tests/nearby.spec.mjs:12:1 › only the pothole 40 m away is offered, Me too adds a +1 and no request, and the same phone sees it as added (1.4s) |   1 passed (6.1s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-390] › tests/nearby.spec.mjs:12:1 › only the pothole 40 m away is offered, Me too adds a +1 and no request, and the same phone sees it as added 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('#metoo-text')
+    Expected: "Thanks. We added you to HP-1001."
+    Received: "Thanks. We added you to HP-1004."
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toHaveText" locator('#metoo-text') with timeout 10000ms
+      - waiting for locator('#metoo-text')
+        - locator resolved to <p id="metoo-text" class="status-sentence"></p>
+        - unexpected value ""
+        23 × locator resolved to <p id="metoo-text" class="status-sentence">Thanks. We added you to HP-1004.</p>
+           - unexpected value "Thanks. We added you to HP-1004."
+
+
+      28 |
+      29 |   await tap(page, cards.first().locator('[data-metoo]'), 'Me too')
+    > 30 |   await expect(page.locator('#metoo-text')).toHaveText(`Thanks. We added you to ${at40.ref}.`)
+         |                                             ^
+      31 |   expect((await staffGet(request, token, at40.id)).plus_ones, 'the API count is 1').toBe(1)
+      32 |   expect(await requestCount(request, token), 'no new request').toBe(3)
+      33 |
+        at <repo>/app/tests/nearby.spec.mjs:30:45
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/metoo/results/nearby-only-the-pothole-40-13d8d-same-phone-sees-it-as-added-chromium-390/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/metoo/results/nearby-only-the-pothole-40-13d8d-same-phone-sees-it-as-added-chromium-390/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/metoo/results/nearby-only-the-pothole-40-13d8d-same-phone-sees-it-as-added-chromium-390/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/metoo/results/nearby-only-the-pothole-40-13d8d-same-phone-sees-it-as-added-chromium-390/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-390] › tests/nearby.spec.mjs:12:1 › only the pothole 40 m away is offered, Me too adds a +1 and no request, and the same phone sees it as added 
+
+
+== 2026-09-14T21:53:16.540Z attribution: map.js passes an empty customAttribution (and the no-WebGL fallback adds nothing)
+   spec: playwright test targets.spec.mjs --project chromium-1280 -g attribution on 8506, copy in app/.negative/attribution
+   unbroken copy: exit 0;   ✓  1 [chromium-1280] › tests/targets.spec.mjs:151:1 › the resident map shows the OpenFreeMap attribution with its three links (660ms) |   1 passed (5.5s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-1280] › tests/targets.spec.mjs:151:1 › the resident map shows the OpenFreeMap attribution with its three links 
+
+    Error: attribution link https://openfreemap.org
+
+    expect(locator).toBeVisible() failed
+
+    Locator: locator('#map .leaflet-control-attribution').locator('a[href="https://openfreemap.org"]')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - attribution link https://openfreemap.org locator('#map .leaflet-control-attribution').locator('a[href="https://openfreemap.org"]') with timeout 10000ms
+      - waiting for locator('#map .leaflet-control-attribution').locator('a[href="https://openfreemap.org"]')
+
+
+      156 |   for (const [href, text] of [['https://openfreemap.org', 'OpenFreeMap'], ['https://www.openmaptiles.org/', '© OpenMapTiles'], ['https://www.openstreetmap.org/copyright', 'OpenStreetMap']]) {
+      157 |     const link = attribution.locator(`a[href="${href}"]`)
+    > 158 |     await expect(link, `attribution link ${href}`).toBeVisible()
+          |                                                    ^
+      159 |     await expect(link).toHaveText(text)
+      160 |     await link.scrollIntoViewIfNeeded()
+      161 |     expect((await hitTest(link)).hit, `${text} link is not covered`).toBe('')
+        at <repo>/app/tests/targets.spec.mjs:158:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/attribution/results/targets-the-resident-map-s-4f495-bution-with-its-three-links-chromium-1280/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/attribution/results/targets-the-resident-map-s-4f495-bution-with-its-three-links-chromium-1280/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/attribution/results/targets-the-resident-map-s-4f495-bution-with-its-three-links-chromium-1280/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/attribution/results/targets-the-resident-map-s-4f495-bution-with-its-three-links-chromium-1280/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-1280] › tests/targets.spec.mjs:151:1 › the resident map shows the OpenFreeMap attribution with its three links 
+
+
+== 2026-09-14T21:53:37.688Z overdue: the board reads overdue from age_days > 10 instead of the API's overdue
+   spec: playwright test overdue.spec.mjs --project chromium-1280 on 8506, copy in app/.negative/overdue
+   unbroken copy: exit 0;   ✓  1 [chromium-1280] › tests/overdue.spec.mjs:10:1 › a streetlight past its SLA is overdue on the board, Overdue only shows just it, and a 12-day SLA clears it (1.4s) |   1 passed (6.2s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-1280] › tests/overdue.spec.mjs:10:1 › a streetlight past its SLA is overdue on the board, Overdue only shows just it, and a 12-day SLA clears it 
+
+    Error: no longer overdue after the SLA change
+
+    expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('.col[data-col="new"] [data-ref="HP-1001"]')
+    Expected: "false"
+    Received: "true"
+    Timeout:  10000ms
+
+    Call log:
+      - no longer overdue after the SLA change locator('.col[data-col="new"] [data-ref="HP-1001"]') with timeout 10000ms
+      - waiting for locator('.col[data-col="new"] [data-ref="HP-1001"]')
+        24 × locator resolved to <button type="button" data-id="1001" data-ref="HP-1001" data-overdue="true" class="card-req overdue">…</button>
+           - unexpected value "true"
+
+
+      49 |   await showColumn(page, 'new')
+      50 |   await expect(lightCard).toBeVisible()
+    > 51 |   await expect(lightCard, 'no longer overdue after the SLA change').toHaveAttribute('data-overdue', 'false')
+         |                                                                     ^
+      52 |   await expect(lightCard.locator('.card-overdue')).toHaveCount(0)
+      53 |   expect(await lightCard.evaluate((el) => getComputedStyle(el).borderLeftColor)).not.toBe(RED)
+      54 |   expect((await staffGet(request, token, light.id)).overdue).toBe(false)
+        at <repo>/app/tests/overdue.spec.mjs:51:69
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/overdue/results/overdue-a-streetlight-past-f642d--and-a-12-day-SLA-clears-it-chromium-1280/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/overdue/results/overdue-a-streetlight-past-f642d--and-a-12-day-SLA-clears-it-chromium-1280/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/overdue/results/overdue-a-streetlight-past-f642d--and-a-12-day-SLA-clears-it-chromium-1280/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/overdue/results/overdue-a-streetlight-past-f642d--and-a-12-day-SLA-clears-it-chromium-1280/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-1280] › tests/overdue.spec.mjs:10:1 › a streetlight past its SLA is overdue on the board, Overdue only shows just it, and a 12-day SLA clears it 
+
+
+== 2026-09-14T21:54:00.142Z notestale: Save builds its body from the note's newer answer instead of what the form was drawn from
+   spec: playwright test staff.spec.mjs --project chromium-1280 -g note never undoes on 8506, copy in app/.negative/notestale
+   unbroken copy: exit 0;   ✓  1 [chromium-1280] › tests/staff.spec.mjs:164:1 › a Save after adding a note never undoes a change made meanwhile: it answers 409 and shows the stale box (1.2s) |   1 passed (6.1s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-1280] › tests/staff.spec.mjs:164:1 › a Save after adding a note never undoes a change made meanwhile: it answers 409 and shows the stale box 
+
+    Error: the Save meets the stale check
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 409
+    Received: 200
+
+      176 |   const answer = page.waitForResponse(isPut(created.id))
+      177 |   await tap(page, page.locator('#save'), 'Save')
+    > 178 |   expect((await answer).status(), 'the Save meets the stale check').toBe(409)
+          |                                                                     ^
+      179 |   await expect(page.locator('#stale')).toContainText('Someone else changed this report.')
+      180 |   const after = await staffGet(request, token, created.id)
+      181 |   expect(after.status, 'the other change is not undone').toBe('assigned')
+        at <repo>/app/tests/staff.spec.mjs:178:69
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/notestale/results/staff-a-Save-after-adding--6c4d8-409-and-shows-the-stale-box-chromium-1280/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/notestale/results/staff-a-Save-after-adding--6c4d8-409-and-shows-the-stale-box-chromium-1280/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/notestale/results/staff-a-Save-after-adding--6c4d8-409-and-shows-the-stale-box-chromium-1280/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/notestale/results/staff-a-Save-after-adding--6c4d8-409-and-shows-the-stale-box-chromium-1280/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-1280] › tests/staff.spec.mjs:164:1 › a Save after adding a note never undoes a change made meanwhile: it answers 409 and shows the stale box 
+
+
+== 2026-09-14T21:57:11.503Z signedout-proof: one-off proof for M3c finding 3: the CSV error path writes to #csv-error without checking it still exists
+   spec: playwright test staff.spec.mjs --project chromium-1280 -g after the session ended go to sign-in on 8506, copy in app/.negative/signedout-proof
+   unbroken copy: exit 0;   ✓  1 [chromium-1280] › tests/staff.spec.mjs:258:1 › Save settings, Add crew, Change PIN and Download CSV after the session ended go to sign-in without a page error (2.6s) |   1 passed (7.4s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-1280] › tests/staff.spec.mjs:258:1 › Save settings, Add crew, Change PIN and Download CSV after the session ended go to sign-in without a page error 
+
+    Error: no page error once the sign-in screen shows
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "pageerror: Cannot set properties of null (setting 'textContent')",
+    + ]
+
+      281 |
+      282 |   await page.waitForTimeout(500)
+    > 283 |   expect(errors, 'no page error once the sign-in screen shows').toEqual([])
+          |                                                                 ^
+      284 | })
+      285 |
+      286 | test('with the detail open at 1280 the board says it scrolls sideways and fades its right edge, until the last column is in view @desktop', async ({ page, request }) => {
+        at <repo>/app/tests/staff.spec.mjs:283:65
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/signedout-proof/results/staff-Save-settings-Add-cr-dbfe0-ign-in-without-a-page-error-chromium-1280/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/signedout-proof/results/staff-Save-settings-Add-cr-dbfe0-ign-in-without-a-page-error-chromium-1280/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/signedout-proof/results/staff-Save-settings-Add-cr-dbfe0-ign-in-without-a-page-error-chromium-1280/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/signedout-proof/results/staff-Save-settings-Add-cr-dbfe0-ign-in-without-a-page-error-chromium-1280/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-1280] › tests/staff.spec.mjs:258:1 › Save settings, Add crew, Change PIN and Download CSV after the session ended go to sign-in without a page error 
+
+
+== 2026-09-14T21:58:14.237Z boundary: report.js treats every pin as inside the boundary (no ray casting on the phone)
+   spec: playwright test boundary.spec.mjs --project chromium-390 -g outside the boundary on 8506, copy in app/.negative/boundary
+   unbroken copy: exit 0;   ✓  1 [chromium-390] › tests/boundary.spec.mjs:14:1 › a tap outside the boundary stops at the pin step and makes no request; a tap inside goes on (2.6s) |   1 passed (7.4s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-390] › tests/boundary.spec.mjs:14:1 › a tap outside the boundary stops at the pin step and makes no request; a tap inside goes on 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('#where-label')
+    Expected: "false"
+    Received: "true"
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toHaveAttribute" locator('#where-label') with timeout 10000ms
+      - waiting for locator('#where-label')
+        5 × locator resolved to <p id="where-label" aria-live="polite" data-inside="true" class="where-label" data-lat="49.142022503974616" data-lng="-55.31993865966797"></p>
+          - unexpected value "true"
+        19 × locator resolved to <p id="where-label" aria-live="polite" data-inside="true" class="where-label" data-lat="49.142022503974616" data-lng="-55.31993865966797">Not near a named street</p>
+           - unexpected value "true"
+
+
+      17 |   await zoomOutTo(page, 12)
+      18 |   await tapLatLng(page, map, POINTS.outside_east_of_boundary, 'outside the boundary (east)')
+    > 19 |   await expect(page.locator('#where-label')).toHaveAttribute('data-inside', 'false')
+         |                                              ^
+      20 |   await expect(page.locator('#where-error')).toHaveText(OUTSIDE)
+      21 |   await expect(page.locator('#where-next')).toBeDisabled()
+      22 |   const token = await staffToken(request)
+        at <repo>/app/tests/boundary.spec.mjs:19:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/boundary/results/boundary-a-tap-outside-the-8a7e1-equest-a-tap-inside-goes-on-chromium-390/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/boundary/results/boundary-a-tap-outside-the-8a7e1-equest-a-tap-inside-goes-on-chromium-390/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/boundary/results/boundary-a-tap-outside-the-8a7e1-equest-a-tap-inside-goes-on-chromium-390/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/boundary/results/boundary-a-tap-outside-the-8a7e1-equest-a-tap-inside-goes-on-chromium-390/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-390] › tests/boundary.spec.mjs:14:1 › a tap outside the boundary stops at the pin step and makes no request; a tap inside goes on 
+
+
+== 2026-09-14T21:58:39.967Z statusleak: the Worker's GET /api/status answer carries reporter_phone
+   spec: playwright test report.spec.mjs --project chromium-390 on 8506, copy in app/.negative/statusleak
+   unbroken copy: exit 0;   ✓  1 [chromium-390] › tests/report.spec.mjs:9:1 › a resident reports a pothole with a photo, and the status page keeps their details private (2.7s) |   1 passed (6.6s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-390] › tests/report.spec.mjs:9:1 › a resident reports a pothole with a photo, and the status page keeps their details private 
+
+    Error: the response body of http://127.0.0.1:8506/api/status/0gYAqgyQOBtWXujr2IpQC4NY never contains "709-555-0199"
+
+    expect(received).not.toContain(expected) // indexOf
+
+    Expected substring: not "709-555-0199"
+    Received string:        "{\"town\":{\"name\":\"SAMPLE Town of Harbour Pond (demo)\",\"sample\":true,\"office_phone\":\"709-555-0100\"},\"ref\":\"HP-1001\",\"category\":\"pothole\",\"category_label\":\"Pothole\",\"location_label\":\"Ivanys Lane\",\"reporter_phone\":\"709-555-0199\",\"status\":\"new\",\"status_label\":\"New\",\"public_message\":null,\"plus_ones\":0,\"reported_at\":\"2026-09-14T21:58:54.454Z\",\"reported_label\":\"Mon Sep 14, 7:28 PM\",\"updated_at\":\"2026-09-14T21:58:54.454Z\",\"updated_label\":\"Mon Sep 14, 7:28 PM\",\"closed_at\":null,\"closed_label\":null,\"merged_into\":null,\"history\":[{\"at\":\"2026-09-14T21:58:54.454Z\",\"at_label\":\"Mon Sep 14, 7:28 PM\",\"text\":\"Reported\"}]}"
+
+      56 |   for (const s of secrets) expect(text, `the status page text never shows "${s}"`).not.toContain(s)
+      57 |   for (const b of bodies) {
+    > 58 |     for (const s of secrets) expect(b.text, `the response body of ${b.url} never contains "${s}"`).not.toContain(s)
+         |                                                                                                        ^
+      59 |   }
+      60 | })
+      61 |
+        at <repo>/app/tests/report.spec.mjs:58:104
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/statusleak/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/statusleak/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/statusleak/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/statusleak/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-390] › tests/report.spec.mjs:9:1 › a resident reports a pothole with a photo, and the status page keeps their details private 
+
+
+== 2026-09-14T21:58:55.592Z overlay: a transparent element covers the Send report button
+   spec: playwright test report.spec.mjs --project chromium-390 on 8506, copy in app/.negative/overlay
+   unbroken copy: exit 0;   ✓  1 [chromium-390] › tests/report.spec.mjs:9:1 › a resident reports a pothole with a photo, and the status page keeps their details private (2.9s) |   1 passed (7.8s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-390] › tests/report.spec.mjs:9:1 › a resident reports a pothole with a photo, and the status page keeps their details private 
+
+    Error: tap(Send report) hit-test at 195,783: something else is on top
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: ""
+    Received: "<div class=\"negative-overlay\" aria-hidden=\"true\" style=\"position: absolute; inset: 0; background: transparent; z-index: 5\"></div>"
+
+       at helpers.mjs:97
+
+       95 |   await intoView(page, locator)
+       96 |   const { x, y, hit } = await hitTest(locator)
+    >  97 |   expect(hit, `tap(${label}) hit-test at ${Math.round(x)},${Math.round(y)}: something else is on top`).toBe('')
+          |                                                                                                        ^
+       98 |   if (await isTouch(page)) await page.touchscreen.tap(x, y)
+       99 |   else await page.mouse.click(x, y)
+      100 | }
+        at tap (<repo>/app/tests/helpers.mjs:97:104)
+        at <repo>/app/tests/report.spec.mjs:29:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/overlay/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/overlay/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/overlay/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/overlay/results/report-a-resident-reports--619ab-keeps-their-details-private-chromium-390/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-390] › tests/report.spec.mjs:9:1 › a resident reports a pothole with a photo, and the status page keeps their details private 
+
+
+== 2026-09-14T21:59:10.349Z metoo: Me too creates a new request instead of calling me-too
+   spec: playwright test nearby.spec.mjs --project chromium-390 on 8506, copy in app/.negative/metoo
+   unbroken copy: exit 0;   ✓  1 [chromium-390] › tests/nearby.spec.mjs:12:1 › only the pothole 40 m away is offered, Me too adds a +1 and no request, and the same phone sees it as added (1.5s) |   1 passed (6.4s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-390] › tests/nearby.spec.mjs:12:1 › only the pothole 40 m away is offered, Me too adds a +1 and no request, and the same phone sees it as added 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('#metoo-text')
+    Expected: "Thanks. We added you to HP-1001."
+    Received: "Thanks. We added you to HP-1004."
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toHaveText" locator('#metoo-text') with timeout 10000ms
+      - waiting for locator('#metoo-text')
+        - locator resolved to <p id="metoo-text" class="status-sentence"></p>
+        - unexpected value ""
+        23 × locator resolved to <p id="metoo-text" class="status-sentence">Thanks. We added you to HP-1004.</p>
+           - unexpected value "Thanks. We added you to HP-1004."
+
+
+      28 |
+      29 |   await tap(page, cards.first().locator('[data-metoo]'), 'Me too')
+    > 30 |   await expect(page.locator('#metoo-text')).toHaveText(`Thanks. We added you to ${at40.ref}.`)
+         |                                             ^
+      31 |   expect((await staffGet(request, token, at40.id)).plus_ones, 'the API count is 1').toBe(1)
+      32 |   expect(await requestCount(request, token), 'no new request').toBe(3)
+      33 |
+        at <repo>/app/tests/nearby.spec.mjs:30:45
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/metoo/results/nearby-only-the-pothole-40-13d8d-same-phone-sees-it-as-added-chromium-390/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/metoo/results/nearby-only-the-pothole-40-13d8d-same-phone-sees-it-as-added-chromium-390/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/metoo/results/nearby-only-the-pothole-40-13d8d-same-phone-sees-it-as-added-chromium-390/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/metoo/results/nearby-only-the-pothole-40-13d8d-same-phone-sees-it-as-added-chromium-390/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-390] › tests/nearby.spec.mjs:12:1 › only the pothole 40 m away is offered, Me too adds a +1 and no request, and the same phone sees it as added 
+
+
+== 2026-09-14T21:59:33.713Z attribution: map.js passes an empty customAttribution (and the no-WebGL fallback adds nothing)
+   spec: playwright test targets.spec.mjs --project chromium-1280 -g attribution on 8506, copy in app/.negative/attribution
+   unbroken copy: exit 0;   ✓  1 [chromium-1280] › tests/targets.spec.mjs:151:1 › the resident map shows the OpenFreeMap attribution with its three links (752ms) |   1 passed (5.6s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-1280] › tests/targets.spec.mjs:151:1 › the resident map shows the OpenFreeMap attribution with its three links 
+
+    Error: attribution link https://openfreemap.org
+
+    expect(locator).toBeVisible() failed
+
+    Locator: locator('#map .leaflet-control-attribution').locator('a[href="https://openfreemap.org"]')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - attribution link https://openfreemap.org locator('#map .leaflet-control-attribution').locator('a[href="https://openfreemap.org"]') with timeout 10000ms
+      - waiting for locator('#map .leaflet-control-attribution').locator('a[href="https://openfreemap.org"]')
+
+
+      156 |   for (const [href, text] of [['https://openfreemap.org', 'OpenFreeMap'], ['https://www.openmaptiles.org/', '© OpenMapTiles'], ['https://www.openstreetmap.org/copyright', 'OpenStreetMap']]) {
+      157 |     const link = attribution.locator(`a[href="${href}"]`)
+    > 158 |     await expect(link, `attribution link ${href}`).toBeVisible()
+          |                                                    ^
+      159 |     await expect(link).toHaveText(text)
+      160 |     await link.scrollIntoViewIfNeeded()
+      161 |     expect((await hitTest(link)).hit, `${text} link is not covered`).toBe('')
+        at <repo>/app/tests/targets.spec.mjs:158:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/attribution/results/targets-the-resident-map-s-4f495-bution-with-its-three-links-chromium-1280/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/attribution/results/targets-the-resident-map-s-4f495-bution-with-its-three-links-chromium-1280/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/attribution/results/targets-the-resident-map-s-4f495-bution-with-its-three-links-chromium-1280/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/attribution/results/targets-the-resident-map-s-4f495-bution-with-its-three-links-chromium-1280/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-1280] › tests/targets.spec.mjs:151:1 › the resident map shows the OpenFreeMap attribution with its three links 
+
+
+== 2026-09-14T21:59:55.904Z overdue: the board reads overdue from age_days > 10 instead of the API's overdue
+   spec: playwright test overdue.spec.mjs --project chromium-1280 on 8506, copy in app/.negative/overdue
+   unbroken copy: exit 0;   ✓  1 [chromium-1280] › tests/overdue.spec.mjs:10:1 › a streetlight past its SLA is overdue on the board, Overdue only shows just it, and a 12-day SLA clears it (1.4s) |   1 passed (6.5s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-1280] › tests/overdue.spec.mjs:10:1 › a streetlight past its SLA is overdue on the board, Overdue only shows just it, and a 12-day SLA clears it 
+
+    Error: no longer overdue after the SLA change
+
+    expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  locator('.col[data-col="new"] [data-ref="HP-1001"]')
+    Expected: "false"
+    Received: "true"
+    Timeout:  10000ms
+
+    Call log:
+      - no longer overdue after the SLA change locator('.col[data-col="new"] [data-ref="HP-1001"]') with timeout 10000ms
+      - waiting for locator('.col[data-col="new"] [data-ref="HP-1001"]')
+        24 × locator resolved to <button type="button" data-id="1001" data-ref="HP-1001" data-overdue="true" class="card-req overdue">…</button>
+           - unexpected value "true"
+
+
+      49 |   await showColumn(page, 'new')
+      50 |   await expect(lightCard).toBeVisible()
+    > 51 |   await expect(lightCard, 'no longer overdue after the SLA change').toHaveAttribute('data-overdue', 'false')
+         |                                                                     ^
+      52 |   await expect(lightCard.locator('.card-overdue')).toHaveCount(0)
+      53 |   expect(await lightCard.evaluate((el) => getComputedStyle(el).borderLeftColor)).not.toBe(RED)
+      54 |   expect((await staffGet(request, token, light.id)).overdue).toBe(false)
+        at <repo>/app/tests/overdue.spec.mjs:51:69
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/overdue/results/overdue-a-streetlight-past-f642d--and-a-12-day-SLA-clears-it-chromium-1280/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/overdue/results/overdue-a-streetlight-past-f642d--and-a-12-day-SLA-clears-it-chromium-1280/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/overdue/results/overdue-a-streetlight-past-f642d--and-a-12-day-SLA-clears-it-chromium-1280/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/overdue/results/overdue-a-streetlight-past-f642d--and-a-12-day-SLA-clears-it-chromium-1280/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-1280] › tests/overdue.spec.mjs:10:1 › a streetlight past its SLA is overdue on the board, Overdue only shows just it, and a 12-day SLA clears it 
+
+
+== 2026-09-14T22:00:19.968Z notestale: Save builds its body from the note's newer answer instead of what the form was drawn from
+   spec: playwright test staff.spec.mjs --project chromium-1280 -g note never undoes on 8506, copy in app/.negative/notestale
+   unbroken copy: exit 0;   ✓  1 [chromium-1280] › tests/staff.spec.mjs:164:1 › a Save after adding a note never undoes a change made meanwhile: it answers 409 and shows the stale box (1.4s) |   1 passed (6.3s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-1280] › tests/staff.spec.mjs:164:1 › a Save after adding a note never undoes a change made meanwhile: it answers 409 and shows the stale box 
+
+    Error: the Save meets the stale check
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 409
+    Received: 200
+
+      176 |   const answer = page.waitForResponse(isPut(created.id))
+      177 |   await tap(page, page.locator('#save'), 'Save')
+    > 178 |   expect((await answer).status(), 'the Save meets the stale check').toBe(409)
+          |                                                                     ^
+      179 |   await expect(page.locator('#stale')).toContainText('Someone else changed this report.')
+      180 |   const after = await staffGet(request, token, created.id)
+      181 |   expect(after.status, 'the other change is not undone').toBe('assigned')
+        at <repo>/app/tests/staff.spec.mjs:178:69
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/notestale/results/staff-a-Save-after-adding--6c4d8-409-and-shows-the-stale-box-chromium-1280/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/notestale/results/staff-a-Save-after-adding--6c4d8-409-and-shows-the-stale-box-chromium-1280/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/notestale/results/staff-a-Save-after-adding--6c4d8-409-and-shows-the-stale-box-chromium-1280/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/notestale/results/staff-a-Save-after-adding--6c4d8-409-and-shows-the-stale-box-chromium-1280/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium-1280] › tests/staff.spec.mjs:164:1 › a Save after adding a note never undoes a change made meanwhile: it answers 409 and shows the stale box 
+
+
