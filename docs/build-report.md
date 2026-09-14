@@ -42,6 +42,12 @@ touched, and is gated on printed `*_EXIT=` lines.
    the new version and the Worker accepted it. No Worker check can catch a client that sends the version it was just given. Sent to ts2
    as a fix with a spec that proves the stale 409 appears (DECISIONS 19).
 
+9. **A screenshot test would fail on Sunday evenings** (ts1's read-only cross-review of ts2 M3, medium): it picked "last week" from the UTC
+   date, which from 21:30 NDT to midnight on a Sunday is already the Monday of the current NL week, so the test's arranged reports were in
+   the future and Previous week didn't match, in all four projects. Plus three narrow real-clock windows in `report-week.spec` (a week
+   change, an NL midnight between download and API fetch, a report falling due mid-run). Sent to ts2 (DECISIONS 21). Tonight's runs were
+   outside every window, which is exactly why no run caught it.
+
 ## Lead checks by eye
 - ts2 M1 screenshots (resident home 390, nearby 390, status 1280): SAMPLE on every screen, banner first, no private fields on status.
 - ts2 M2 real-Worker screenshots (staff board 1280, detail 390, join confirm 1280): overdue edges and counts right, `tel:` contact,

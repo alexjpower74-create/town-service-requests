@@ -62,3 +62,9 @@ PLAN.md, API.md and reports can point at them.
 19. **A save must never carry a version the form wasn't drawn from** (ts1's finding 1): after a note (or any answer that brings a newer
     version) the form either re-renders from that answer or the save sends the version the form was rendered with, so the Worker's
     stale check still fires. ts2 fixes it with a spec that proves the 409 appears.
+20. **Download CSV exports every report except merged ones, not the board's current filters** (ts1's cross-review of ts2 M3, finding 6).
+    The page says so in plain words, and the accountant or council wants the whole list; the API still accepts the list filters if a
+    "what I'm looking at" export is wanted later.
+21. **Tests never work out an NL date from UTC.** Any test that needs "this week" or "today" reads it from the API (ts1's M3 finding
+    1: a UTC "last week" lands on the current NL week from 21:30 NDT to midnight on Sundays). Tests that compare the UI with an API
+    answer read on the real clock re-read after the UI loads, or accept either side of an NL midnight.
