@@ -336,3 +336,14 @@ tab or CR gets a leading `'`. **No reporter name, phone, description or notes.**
    where the problem is." No rate guard, `Cache-Control: no-store`. The app calls it after each pin placement (debounced ~300 ms,
    latest answer wins) and shows "Near {location_label}" from it; the phone's own ray-casting check stays the instant gate for
    **Next**, and the Worker's refusal on POST stays the authority. If the call fails (no signal) the hint is simply not shown.
+10. **A crew only auto-assigns when it changes.** "Setting a crew on a `new` request without a `status` moves it to `assigned`" applies
+    only when `crew_id` differs from the request's current crew. Re-sending a `new` request's current crew is no change (clarification
+    6). (ts2's cross-review of ts1 M1, finding 1)
+11. **A malformed escape in a key is a 404, not a 500.** `/api/status/%E0%A4%A` answers the status 404 message; `/api/photos/<bad>`
+    the photo 404. (ts2 finding 2)
+12. **Staff PUT field checks run in this order:** `status` → `crew_id` → `public_message` length → "Pick a crew first." → "Say why in the
+    message to the public.". Notes check `text` before the id (400 before 404). (ts2 findings 3 and 4: the Worker's order is kept)
+13. **A merge that keeps losing races answers 409 `bad_state`** "Someone else changed one of these reports. Reload and try again."
+    (after its retries), never a 500. (ts2 finding 5)
+14. **Joining by typed reference:** there is no lookup-by-ref route. The app parses `HP-1003` → id 1003 and loads
+    `GET /api/staff/requests/1003` before its confirm (404 → the API's message). (ts2 cross-review)
