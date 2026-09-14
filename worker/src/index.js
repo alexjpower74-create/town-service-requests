@@ -207,6 +207,18 @@ async function getTown (ctx) {
   })
 }
 
+/** GET /api/town/locate: the Worker's own boundary, street label and ward for a pin (API.md clarification 9). */
+async function locate (ctx) {
+  const q = ctx.url.searchParams
+  const lat = queryNumber(q.get('lat'))
+  const lng = queryNumber(q.get('lng'))
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw badRequest('location', 'Put a pin on the map where the problem is.')
+  const point = [lat, lng]
+  return json(200, { inside: pointInRing(point, TOWN.boundary), location_label: locationLabel(point, TOWN.streets), ward: wardOf(point, TOWN.wards) })
+}
+
+const queryNumber = v => (v === null || v.trim() === '' ? NaN : Number(v))
+
 /** undefined or null -> ''; a string -> trimmed; anything else -> null (invalid). */
 const optionalText = v => (v === undefined || v === null ? '' : typeof v === 'string' ? v.trim() : null)
 
@@ -359,9 +371,8 @@ async function nearby (ctx) {
   const q = ctx.url.searchParams
   const category = q.get('category')
   if (!CATEGORY_KEYS.includes(category)) throw badRequest('category', 'Pick what kind of problem it is.')
-  const num = v => (v === null || v.trim() === '' ? NaN : Number(v))
-  const lat = num(q.get('lat'))
-  const lng = num(q.get('lng'))
+  const lat = queryNumber(q.get('lat'))
+  const lng = queryNumber(q.get('lng'))
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw badRequest('location', 'Put a pin on the map where the problem is.')
   requireInside(lat, lng)
   const { results } = await ctx.db.prepare(`SELECT * FROM requests WHERE category = ? AND status IN (${OPEN_SQL})`).bind(category).all()
@@ -669,6 +680,7 @@ async function testReset (ctx) {
 const ID = '(\\d{1,15})'
 const ROUTES = [
   ['GET', '/api/town', getTown],
+  ['GET', '/api/town/locate', locate],
   ['POST', '/api/requests', createRequest],
   ['GET', '/api/requests/nearby', nearby],
   ['PUT', `/api/requests/${ID}/photo`, uploadPhoto, 'id'],

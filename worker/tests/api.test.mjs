@@ -147,6 +147,41 @@ test('town shape', async () => {
   assert.ok(!r.text.includes('polygon') && !r.text.includes('lines'))
 })
 
+test('town locate: the Worker\'s own inside, street label and ward for a pin', async () => {
+  const locate = ([lat, lng]) => api('GET', `/api/town/locate?lat=${lat}&lng=${lng}`)
+  let r = await locate(POINTS.inside_centre)
+  assert.equal(r.status, 200, r.text)
+  assert.equal(r.headers.get('cache-control'), 'no-store')
+  assert.deepEqual(Object.keys(r.body).sort(), ['inside', 'location_label', 'ward'])
+  assert.equal(r.body.inside, true)
+  assert.equal(r.body.ward, 'centre')
+  assert.equal(typeof r.body.location_label, 'string')
+
+  r = await locate(POINTS.on_street.point)
+  assert.deepEqual(r.body, { inside: true, location_label: 'Airbase Road', ward: 'north' })
+  assert.equal(r.body.location_label, POINTS.on_street.street)
+
+  r = await locate(POINTS.far_from_streets_inside.point)
+  assert.deepEqual(r.body, { inside: true, location_label: 'Not near a named street', ward: 'south' })
+
+  r = await locate(POINTS.outside_south)
+  assert.equal(r.status, 200, r.text)
+  assert.equal(r.body.inside, false)
+  assert.equal(typeof r.body.location_label, 'string')
+  assert.ok(r.body.location_label.length > 0)
+  assert.equal((await locate(POINTS.outside_east_of_boundary)).body.inside, false)
+
+  // the label is the one a report at that pin stores
+  await reset()
+  const c = await create({ ...at2(POINTS.on_street.point) })
+  assert.equal(c.location_label, 'Airbase Road')
+
+  const msg = 'Put a pin on the map where the problem is.'
+  expectError(await api('GET', '/api/town/locate?lat=abc&lng=-55.352'), 400, 'bad_request', 'location', msg)
+  expectError(await api('GET', '/api/town/locate?lat=49.14'), 400, 'bad_request', 'location', msg)
+  expectError(await api('GET', '/api/town/locate?lat=&lng=-55.352'), 400, 'bad_request', 'location', msg)
+})
+
 // ---- create ----
 
 test('create: a good report', async () => {
