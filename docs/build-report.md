@@ -14,6 +14,7 @@ from a QA worktree pinned to the named sha on port 8509 (`rig qa --ref`), never 
 | ts1 M2c | `bc5e388` | Worker unit + API, 13 negative controls | unit 21/0/0, API 50/0/0, 13/13 red |
 | ts2 M1 | `1757f0c` | (slice's own run, mock only) map-label unit, M1 smoke | 4/0, 522/0; merged on review, real-Worker grading was M2 |
 | main after ts2 M2 | `fb199ec` | Playwright, 4 projects (chromium + webkit, 390 + 1280), real Worker with ts1's M2b/M2c guards | 84 passed / 0 failed / 0 skipped (2.2 min), `PW_EXIT=0` |
+| main after ts2 M3 | `8350c8d` | Playwright, 4 projects, real Worker (adds map, weekly report, settings, overdue, emergency, sign-in rate guard) | 124 passed / 0 failed / 0 skipped (3.6 min), `PW_EXIT=0` |
 
 **A QA run that didn't run.** The first QA attempt for ts1 M2b exited 1 without testing anything: the previous run's negative
 controls had rewritten `worker/tests/negative-control.log` inside the QA worktree, so `rig qa` could not check out the new sha, and
