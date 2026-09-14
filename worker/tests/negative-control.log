@@ -961,3 +961,478 @@ test at tests/api.test.mjs:727:1
     diff: 'simple'
   }
 verdict: RED as expected. "PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing" fail when the in-batch guard never refuses and the early version check is gone.
+
+=== 980cb78 negative:boundary 2026-09-14T20:58:57.260Z ===
+control (unbroken copy): "create: a pin outside the boundary is refused and no request is created" pass
+break: src/index.js: "  if (!pointInRing([lat, lng], TOWN.boundary)) {"  ->  "  if (false) {"
+✖ create: a pin outside the boundary is refused and no request is created (90.796906ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 223.899519
+
+✖ failing tests:
+
+test at tests/api.test.mjs:300:1
+✖ create: a pin outside the boundary is refused and no request is created (90.796906ms)
+  AssertionError [ERR_ASSERTION]: {"id":1001,"ref":"HP-1001","status_url":"http://127.0.0.1:8505/s/?k=3gW5ineHF-uFNXnIitI1QLge","status_key":"3gW5ineHF-uFNXnIitI1QLge","category_label":"Pothole","location_label":"Not near a named street","reported_label":"Mon Sep 7, 10:45 AM","photo":"none","upload_url":null,"upload_token":null,"upload_expires_at":null,"duplicate":false}
+  
+  201 !== 400
+  
+      at expectError (file://<repo>/worker/.negative/negative-boundary/tests/api.test.mjs:41:10)
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-boundary/tests/api.test.mjs:304:5)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 201,
+    expected: 400,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "create: a pin outside the boundary is refused and no request is created" fail when a pin outside the boundary is accepted.
+
+=== 980cb78 negative:radius 2026-09-14T20:59:05.351Z ===
+control (unbroken copy): "nearby: a pothole at 40 m is found and one at 60 m is not" pass
+break: src/index.js: "const NEARBY_METRES = 50\n"  ->  "const NEARBY_METRES = 70\n"
+✖ nearby: a pothole at 40 m is found and one at 60 m is not (177.933165ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 247.688386
+
+✖ failing tests:
+
+test at tests/api.test.mjs:386:1
+✖ nearby: a pothole at 40 m is found and one at 60 m is not (177.933165ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  70 !== 50
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-radius/tests/api.test.mjs:399:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 70,
+    expected: 50,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "nearby: a pothole at 40 m is found and one at 60 m is not" fail when the nearby radius is 70 m instead of 50 m.
+
+=== 980cb78 negative:mergecount 2026-09-14T20:59:13.142Z ===
+control (unbroken copy): "merge keeps the +1 count" pass
+break: src/index.js: "  const added = source.plus_ones + 1\n"  ->  "  const added = 1\n"
+✖ merge keeps the +1 count (214.959349ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 279.479506
+
+✖ failing tests:
+
+test at tests/api.test.mjs:802:1
+✖ merge keeps the +1 count (214.959349ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  3 !== 6
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-mergecount/tests/api.test.mjs:818:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 3,
+    expected: 6,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "merge keeps the +1 count" fail when a merge adds 1 instead of the source's plus_ones + 1.
+
+=== 980cb78 negative:leak 2026-09-14T20:59:20.121Z ===
+control (unbroken copy): "public status never contains private fields" pass
+break: src/index.js: "    location_label: row.location_label, // public: the street name, never the pin\n"  ->  "    location_label: row.location_label, // public: the street name, never the pin\n    reporter_phone: row.reporter_phone,\n"
+✖ public status never contains private fields (231.289943ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 315.134829
+
+✖ failing tests:
+
+test at tests/api.test.mjs:447:1
+✖ public status never contains private fields (231.289943ms)
+  AssertionError [ERR_ASSERTION]: status must not contain "709-555-0199"
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-leak/tests/api.test.mjs:474:37)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+verdict: RED as expected. "public status never contains private fields" fail when the status JSON carries the reporter's phone.
+
+=== 980cb78 negative:overdue 2026-09-14T20:59:27.093Z ===
+control (unbroken copy): "overdue on a fake clock through the API" pass
+break: src/sla.js: "  return isOpen(status) && dueAt !== null && now > dueAt\n"  ->  "  return isOpen(status) && dueAt !== null && now >= createdAt\n"
+✖ overdue on a fake clock through the API (132.995415ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 216.900441
+
+✖ failing tests:
+
+test at tests/api.test.mjs:618:1
+✖ overdue on a fake clock through the API (132.995415ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-overdue/tests/api.test.mjs:626:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "overdue on a fake clock through the API" fail when overdue ignores the SLA and compares now with created_at.
+
+=== 980cb78 negative:idempotent 2026-09-14T20:59:35.159Z ===
+control (unbroken copy): "create: the same submission_id twice makes exactly one request" pass
+break: migrations/0001_init.sql: "  submission_id TEXT NOT NULL UNIQUE,\n"  ->  "  submission_id TEXT NOT NULL,\n"
+break: src/index.js: "  const existing = await findBySubmission(db, body.submission_id)\n"  ->  "  const existing = null\n"
+✖ create: the same submission_id twice makes exactly one request (68.591198ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 137.874795
+
+✖ failing tests:
+
+test at tests/api.test.mjs:312:1
+✖ create: the same submission_id twice makes exactly one request (68.591198ms)
+  AssertionError [ERR_ASSERTION]: {"id":1002,"ref":"HP-1002","status_url":"http://127.0.0.1:8505/s/?k=gPNRDqTvGnRQUZ0ztJ6ib4Rh","status_key":"gPNRDqTvGnRQUZ0ztJ6ib4Rh","category_label":"Pothole","location_label":"Ivanys Lane","reported_label":"Mon Sep 7, 10:45 AM","photo":"waiting","upload_url":"http://127.0.0.1:8505/api/requests/1002/photo","upload_token":"nobTG5YRpwLR96C34ZEIfCRU","upload_expires_at":"2026-09-07T14:15:00.000Z","duplicate":false}
+  
+  201 !== 200
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-idempotent/tests/api.test.mjs:318:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 201,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "create: the same submission_id twice makes exactly one request" fail when a resent report is inserted again.
+
+=== 980cb78 negative:week 2026-09-14T20:59:41.631Z ===
+control (unbroken copy): "weekly report: NL week boundaries, the Sunday 11:30 PM request and the DST weeks" pass
+break: src/time.js: "const bound = date => nlMidnightUtc(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate())\n"  ->  "const bound = date => date.getTime()\n"
+✖ weekly report: NL week boundaries, the Sunday 11:30 PM request and the DST weeks (104.551037ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 173.158144
+
+✖ failing tests:
+
+test at tests/api.test.mjs:1118:1
+✖ weekly report: NL week boundaries, the Sunday 11:30 PM request and the DST weeks (104.551037ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   end_at: '2026-09-14T00:00:00.000Z',
+  +   start_at: '2026-09-07T00:00:00.000Z',
+  -   end_at: '2026-09-14T02:30:00.000Z',
+  -   start_at: '2026-09-07T02:30:00.000Z',
+      week_label: 'Mon Sep 7 to Sun Sep 13',
+      week_start: '2026-09-07'
+    }
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-week/tests/api.test.mjs:1131:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { week_start: '2026-09-07', week_label: 'Mon Sep 7 to Sun Sep 13', start_at: '2026-09-07T00:00:00.000Z', end_at: '2026-09-14T00:00:00.000Z' },
+    expected: { week_start: '2026-09-07', week_label: 'Mon Sep 7 to Sun Sep 13', start_at: '2026-09-07T02:30:00.000Z', end_at: '2026-09-14T02:30:00.000Z' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "weekly report: NL week boundaries, the Sunday 11:30 PM request and the DST weeks" fail when the report week runs from UTC midnight instead of NL midnight.
+
+=== 980cb78 negative:csvguard 2026-09-14T20:59:47.841Z ===
+control (unbroken copy): "CSV export: header, CRLF, quoting, formula guard and NL-date filename" pass
+break: src/csv.js: "  if (/^[=+\\-@\\t\\r]/.test(s)) s = `'${s}`\n"  ->  ""
+✖ CSV export: header, CRLF, quoting, formula guard and NL-date filename (238.467419ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 308.361768
+
+✖ failing tests:
+
+test at tests/api.test.mjs:1153:1
+✖ CSV export: header, CRLF, quoting, formula guard and NL-date filename (238.467419ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      'Reference,Category,Location,Ward,Status,Crew,Plus ones,Reported,Due,Overdue,Closed,Days to close,Public message',
+      'HP-1001,Pothole,Airbase Road,North Ward (SAMPLE),Assigned,Roads crew (SAMPLE),0,2026-09-07 10:45,2026-09-21 10:45,No,,,"He said ""fix it"", please"',
+  +   'HP-1002,Streetlight out,Ivanys Lane,Centre Ward (SAMPLE),New,,0,2026-09-07 11:45,2026-09-17 11:45,No,,,=SUM(A1)',
+  +   "HP-1003,Missed snow clearing,Not near a named street,South Ward (SAMPLE),Won't fix,,0,2026-09-07 12:45,2026-09-09 12:45,No,2026-09-10 16:45,3.2,@crew"
+  -   "HP-1002,Streetlight out,Ivanys Lane,Centre Ward (SAMPLE),New,,0,2026-09-07 11:45,2026-09-17 11:45,No,,,'=SUM(A1)",
+  -   "HP-1003,Missed snow clearing,Not near a named street,South Ward (SAMPLE),Won't fix,,0,2026-09-07 12:45,2026-09-09 12:45,No,2026-09-10 16:45,3.2,'@crew"
+    ]
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-csvguard/tests/api.test.mjs:1174:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'Reference,Category,Location,Ward,Status,Crew,Plus ones,Reported,Due,Overdue,Closed,Days to close,Public message', 'HP-1001,Pothole,Airbase Road,North Ward (SAMPLE),Assigned,Roads crew (SAMPLE),0,2026-09-07 10:45,2026-09-21 10:45,No,,,"He said ""fix it"", please"', 'HP-1002,Streetlight out,Ivanys Lane,Centre Ward (SAMPLE),New,,0,2026-09-07 11:45,2026-09-17 11:45,No,,,=SUM(A1)', "HP-1003,Missed snow clearing,Not near a named street,South Ward (SAMPLE),Won't fix,,0,2026-09-07 12:45,2026-09-09 12:45,No,2026-09-10 16:45,3.2,@crew" ],
+    expected: [ 'Reference,Category,Location,Ward,Status,Crew,Plus ones,Reported,Due,Overdue,Closed,Days to close,Public message', 'HP-1001,Pothole,Airbase Road,North Ward (SAMPLE),Assigned,Roads crew (SAMPLE),0,2026-09-07 10:45,2026-09-21 10:45,No,,,"He said ""fix it"", please"', "HP-1002,Streetlight out,Ivanys Lane,Centre Ward (SAMPLE),New,,0,2026-09-07 11:45,2026-09-17 11:45,No,,,'=SUM(A1)", "HP-1003,Missed snow clearing,Not near a named street,South Ward (SAMPLE),Won't fix,,0,2026-09-07 12:45,2026-09-09 12:45,No,2026-09-10 16:45,3.2,'@crew" ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "CSV export: header, CRLF, quoting, formula guard and NL-date filename" fail when a cell starting with = is written as is.
+
+=== 980cb78 negative:csvleak 2026-09-14T20:59:54.269Z ===
+control (unbroken copy): "CSV export never contains the reporter's name, phone, description or note text" pass
+break: src/csv.js: "  'Days to close', 'Public message']\n"  ->  "  'Days to close', 'Public message', 'Phone']\n"
+break: src/csv.js: "r.days_to_close, r.public_message]\n"  ->  "r.days_to_close, r.public_message, r.reporter_phone]\n"
+break: src/index.js: "({ ...s, public_message: row.public_message })"  ->  "({ ...s, public_message: row.public_message, reporter_phone: row.reporter_phone })"
+✖ CSV export never contains the reporter's name, phone, description or note text (133.287291ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 201.513994
+
+✖ failing tests:
+
+test at tests/api.test.mjs:1186:1
+✖ CSV export never contains the reporter's name, phone, description or note text (133.287291ms)
+  AssertionError [ERR_ASSERTION]: CSV must not contain "709-555-0177"
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-csvleak/tests/api.test.mjs:1195:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+verdict: RED as expected. "CSV export never contains the reporter's name, phone, description or note text" fail when the CSV carries the reporter's phone.
+
+=== 980cb78 negative:mergedreport 2026-09-14T21:00:00.352Z ===
+control (unbroken copy): "weekly report on a fake clock" pass
+break: src/index.js: "  const counted = results.filter(r => r.status !== 'merged') // merged requests are the same problem counted once\n"  ->  "  const counted = results\n"
+✖ weekly report on a fake clock (524.153544ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 598.768854
+
+✖ failing tests:
+
+test at tests/api.test.mjs:1049:1
+✖ weekly report on a fake clock (524.153544ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  ... Skipped lines
+  
+    [
+      {
+        avg_days_to_close: 4.9,
+        category: 'pothole',
+        closed: 3,
+  ...
+        label: 'Missed garbage pickup',
+  +     opened: 2
+  -     opened: 1
+      },
+      {
+        avg_days_to_close: null,
+        category: 'tree',
+        closed: 0,
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-mergedreport/tests/api.test.mjs:1085:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ { category: 'pothole', label: 'Pothole', opened: 2, closed: 3, avg_days_to_close: 4.9 }, { category: 'streetlight', label: 'Streetlight out', opened: 1, closed: 1, avg_days_to_close: 0.3 }, { category: 'snow', label: 'Missed snow clearing', opened: 1, closed: 0, avg_days_to_close: null }, { category: 'water', label: 'Water or sewer problem', opened: 1, closed: 0, avg_days_to_close: null }, { category: 'garbage', label: 'Missed garbage pickup', opened: 2, closed: 0, avg_days_to_close: null }, { category: 'tree', label: 'Fallen tree', opened: 0, closed: 0, avg_days_to_close: null }, { category: 'other', label: 'Something else', opened: 0, closed: 0, avg_days_to_close: null } ],
+    expected: [ { category: 'pothole', label: 'Pothole', opened: 2, closed: 3, avg_days_to_close: 4.9 }, { category: 'streetlight', label: 'Streetlight out', opened: 1, closed: 1, avg_days_to_close: 0.3 }, { category: 'snow', label: 'Missed snow clearing', opened: 1, closed: 0, avg_days_to_close: null }, { category: 'water', label: 'Water or sewer problem', opened: 1, closed: 0, avg_days_to_close: null }, { category: 'garbage', label: 'Missed garbage pickup', opened: 1, closed: 0, avg_days_to_close: null }, { category: 'tree', label: 'Fallen tree', opened: 0, closed: 0, avg_days_to_close: null }, { category: 'other', label: 'Something else', opened: 0, closed: 0, avg_days_to_close: null } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "weekly report on a fake clock" fail when merged requests are counted in the weekly report.
+
+=== 980cb78 negative:pinguard 2026-09-14T21:00:07.615Z ===
+control (unbroken copy): "rate guard: 5 wrong PINs per IP per 15 minutes" pass
+break: src/index.js: "    await attemptStmt(ctx, 'pin').run() // count the wrong PIN\n"  ->  ""
+✖ rate guard: 5 wrong PINs per IP per 15 minutes (195.641169ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 266.999336
+
+✖ failing tests:
+
+test at tests/api.test.mjs:1241:1
+✖ rate guard: 5 wrong PINs per IP per 15 minutes (195.641169ms)
+  AssertionError [ERR_ASSERTION]: {"token":"EHheoTzJ_xQqvSMk7f4nWMAEWkHPOdBX","expires_at":"2026-09-08T01:15:06.000Z"}
+  
+  200 !== 429
+  
+      at expectError (file://<repo>/worker/.negative/negative-pinguard/tests/api.test.mjs:41:10)
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-pinguard/tests/api.test.mjs:1247:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 429,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "rate guard: 5 wrong PINs per IP per 15 minutes" fail when wrong PINs are never counted.
+
+=== 980cb78 negative:batchguard 2026-09-14T21:00:14.629Z ===
+setup (both phases): src/index.js: "  if (body.version !== row.version) throw await stale()\n"  ->  ""
+phase A (copy with the setup only, must pass): "PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing" pass
+break: src/index.js: "const guardOneChange = db => db.prepare(\"SELECT CASE WHEN changes() = 1 THEN 1 ELSE json('refused') END\")\n"  ->  "const guardOneChange = db => db.prepare('SELECT 1')\n"
+✖ PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing (140.107992ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 215.917365
+
+✖ failing tests:
+
+test at tests/api.test.mjs:727:1
+✖ PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing (140.107992ms)
+  AssertionError [ERR_ASSERTION]: {"id":1001,"ref":"HP-1001","category":"pothole","category_label":"Pothole","location_label":"Ivanys Lane","lat":49.1395,"lng":-55.352,"ward":"centre","ward_name":"Centre Ward (SAMPLE)","status":"assigned","status_label":"Assigned","crew_id":1,"crew_name":"Roads crew (SAMPLE)","plus_ones":0,"has_photo":false,"has_contact":false,"merged_count":0,"merged_into_ref":null,"created_at":"2026-09-07T13:15:00.000Z","created_label":"Mon Sep 7, 10:45 AM","age_days":0,"due_at":"2026-09-21T13:15:00.000Z","due_label":"Mon Sep 21","overdue":false,"overdue_days":0,"closed_at":null,"closed_label":null,"days_to_close":null,"version":2,"description":null,"reporter_name":null,"reporter_phone":null,"photo":"none","photo_url":null,"public_message":"First save (SAMPLE).","status_url":"http://127.0.0.1:8505/s/?k=OzAf8xQWoUWt4nCp3D8RGfCX","merged_into":null,"merged":[],"history":[{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"created","text":"Reported","internal":false},{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"crew","text":"Crew: Roads crew (SAMPLE)","internal":true},{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"status","text":"Assigned","internal":false},{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"message","text":"Public message: First save (SAMPLE).","internal":false},{"at":"2026-09-07T13:16:00.000Z","at_label":"Mon Sep 7, 10:46 AM","kind":"status","text":"Marked done","internal":false},{"at":"2026-09-07T13:16:00.000Z","at_label":"Mon Sep 7, 10:46 AM","kind":"message","text":"Public message: Second save (SAMPLE).","internal":false}],"copy_update":"SAMPLE Town of Harbour Pond (demo): update on your report HP-1001 (Pothole, Ivanys Lane). A crew has been assigned. Message from the town: First save (SAMPLE). Follow it here: http://127.0.0.1:8505/s/?k=OzAf8xQWoUWt4nCp3D8RGfCX"}
+  
+  200 !== 409
+  
+      at expectError (file://<repo>/worker/.negative/negative-batchguard/tests/api.test.mjs:41:10)
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-batchguard/tests/api.test.mjs:738:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 409,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing" fail when the in-batch guard never refuses and the early version check is gone.
+
+=== 980cb78 negative:mergegiveup 2026-09-14T21:00:21.047Z ===
+setup (both phases): src/index.js: ".bind(target.id, at, at, source.id, source.version),\n"  ->  ".bind(target.id, at, at, source.id, source.version - 1),\n"
+phase A (copy with the setup only, must pass): "merge: a merge that keeps losing its version guard gives up with 409 and writes nothing" pass
+break: src/index.js: "    throw badState('Someone else changed one of these reports. Reload and try again.') // clarification 13\n"  ->  "    throw e\n"
+✖ merge: a merge that keeps losing its version guard gives up with 409 and writes nothing (146.186274ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 205.270369
+
+✖ failing tests:
+
+test at tests/merge-giveup.test.mjs:36:1
+✖ merge: a merge that keeps losing its version guard gives up with 409 and writes nothing (146.186274ms)
+  AssertionError [ERR_ASSERTION]: {"error":"Something went wrong. Try again.","code":"server_error"}
+  
+  500 !== 409
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-mergegiveup/tests/merge-giveup.test.mjs:46:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 500,
+    expected: 409,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "merge: a merge that keeps losing its version guard gives up with 409 and writes nothing" fail when a merge that keeps losing its guard rethrows (500) instead of answering 409.
