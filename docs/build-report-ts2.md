@@ -90,3 +90,108 @@
    Street and water names stay. Say if you want it shown.
 3. The report file is `docs/build-report-ts2.md`, outside `app/**`, as the brief asks. If `rig guard` refuses it at commit, it can
    move.
+
+Lead's answers (2026-09-14): (1) the hint moves to the new `GET /api/town/locate` (API.md clarification 9); the phone keeps its
+ray casting as the gate for Next and drops its own nearest-point guess (M2). (2) hiding `aerodrome_label` stays (DECISIONS 16).
+
+## M2a — 2026-09-14
+
+`git rebase main` onto `13d8a77` (ts1 M1 Worker and my M1 merged, API.md clarifications 1–9): clean, no conflicts.
+
+## Cross-review of ts1 M1
+
+Read-only, from the app's side: `worker/src/index.js` and the helpers it imports (`auth`, `clock`, `copy`, `geo`, `history`,
+`lists`, `sla`, `time`, `sample`, `town-data`), `worker/migrations/0001_init.sql`, `0002_sample.sql` and `wrangler.toml`, against
+docs/API.md with clarifications 1–9. Every finding below comes from reading the code. Nothing was executed except the harness boot
+in the next section, so each finding names the case that would show it. I edited nothing in `worker/**`.
+
+### Findings (none block M2)
+1. **A PUT that repeats a `new` request's current crew moves it to Assigned.** `worker/src/index.js:552`:
+   `else if (has(body, 'crew_id') && crewId !== null && row.status === 'new') status = 'assigned'` checks that `crew_id` is in the
+   body, not that it changed. A request reopened to `new` that keeps its crew, then saved with `{ version, crew_id: <same crew> }`,
+   becomes `assigned` with a "Assigned" history entry and a version bump. API.md says "Setting a crew on a `new` request…" and
+   clarification 6 says the same crew is "no change". Condition should be `crewId !== row.crew_id`. No test in
+   `worker/tests/api.test.mjs` covers a same-crew PUT on a `new` request. **App impact:** none if the staff Save always sends
+   `status` (which M2 will). It would bite a client that sends only the changed fields.
+2. **A malformed `%` escape in a status link answers 500, not the 404 message.** `worker/src/index.js:699` runs
+   `decodeURIComponent(m[1])` outside any guard. `GET /api/status/%E0%A4%A` throws `URIError` and falls through to
+   `index.js:711-712` (500 `server_error` "Something went wrong. Try again."). Same for `/api/photos/…`. **App impact:** a resident
+   with a truncated or hand-edited link sees "Something went wrong" instead of "We can't find that report. Check the link, or call
+   the town office." The status page shows whatever `error` text comes back, so it needs no change once the Worker answers 404.
+3. **Validation order in staff PUT differs from API.md's list.** API.md lists: status → crew_id → crew needed → wont_fix needs a
+   message → message ≤ 500. `worker/src/index.js:544-554` checks the message length (547) before "Pick a crew first." (553) and
+   "Say why…" (554). Only a PUT that fails two rules at once shows it (e.g. `status: 'assigned'`, no crew, a 501-character message →
+   field `public_message`, where the list order gives `crew_id`). Each rule alone is tested (`api.test.mjs:659-665`). **App
+   impact:** negligible (one inline message at a time either way). Worth one line in a clarification, or a reorder.
+4. **Notes: the text is checked before the id.** `worker/src/index.js:583-584`: an empty note to an unknown id answers 400 field
+   `text`, not 404. Order isn't in the contract. **App impact:** none.
+5. **Merge gives up with a bare 500 after three races.** `worker/src/index.js:630-631`: after two retries on a guard refusal it
+   rethrows, so two staff merging the same pair at once could see "Something went wrong. Try again." rather than a 409. Very
+   unlikely at a town office. **App impact:** the detail shows the error text inline; Reload recovers.
+6. **`GET /api/town/locate` is not in `index.js` yet** (clarification 9). Expected: you said ts1 is adding it before M2.
+7. **Rate guards are not implemented** (the `attempts` table in `0001_init.sql:44-51` is unused; no 429 anywhere). Expected: they
+   are ts1 M2. **App impact:** M2's resident and staff specs don't need them; the sign-in page will show the 429 text as is
+   when they land.
+
+### Checked and clean ("none")
+- **`GET /api/town`** (`index.js:190-208`): every field and name as API.md; `sample` from the settings name; `map_style_url` from
+  `MAP_STYLE_URL` else positron; wards without polygons; streets without lines. Streets are sorted by name because
+  `worker/tools/build-town-data.mjs:21` sorts them when generating `town-data.js` (checked: 67 streets, in name order). None.
+- **`POST /api/requests`** (`index.js:219-319`): the table's order and messages, `field` values (`submission_id`, `device_id`,
+  `category`, `location`, `description`, `name`, `phone`, `has_photo`), `outside_boundary` with field `location`, empty text → null,
+  201 vs 200 `duplicate: true`, fresh upload token only while `waiting`, upload fields null otherwise, the reporter's device
+  recorded. `reported_label` is a full label. None.
+- **`PUT /api/requests/:id/photo`** (`index.js:321-356`): 404 → 401 → 413 → 415 (clarification 5); 200 `{ photo: 'stored' }` then
+  `duplicate: true`; the first photo kept. My M1 retry path (re-POST the same `submission_id`, then PUT with the fresh token) works
+  with this. None.
+- **`GET /api/requests/nearby`** (`index.js:358-388`): fields `category`/`location`, `outside_boundary`, open only (never merged),
+  same category, ≤ 50 m unrounded, closest then id, at most 10, `reported_label` a date label (clarification 8), no private fields.
+  None.
+- **`POST /api/requests/:id/me-too`** (`index.js:390-407`): device check, 409 `bad_state` "This report is already closed." for
+  closed and merged, 201/200 `duplicate`, reporter's own device a duplicate. None.
+- **`GET /api/status/:key`** (`index.js:409-440`): the exact public shape; history from `public_text` of non-internal entries only;
+  `updated_at` the latest public entry; `merged_into { ref, status_url }` built from the target's key; no name, phone, description,
+  notes, crew, photo, lat/lng or ids. 404 text exact. None (apart from finding 2).
+- **Headers** (`index.js:35-39`, `446-449`): every API answer `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, `nosniff`;
+  photos `private, max-age=86400` with no-referrer. Confirmed live on `/api/town` (next section). None.
+- **Staff sign-in / sign-out** (`index.js:454-478`): 401 field `pin` "That PIN is not right."; missing or expired token → 401
+  "Sign in again." with **no** `field`, which is how the app tells a lost session from a form error; token lasts 12 hours. None.
+- **`GET /api/staff/requests`** (`index.js:480-512`): filters and field names, clarification 3–4 messages, empty = absent,
+  `counts` for the five board statuses with every filter except `status`, merged left out unless `status=merged`, oldest first,
+  `now`/`now_label`. None.
+- **StaffRequestSummary and StaffRequest** (`index.js:102-182`): every field in API.md, including `lat`/`lng` for the detail's small
+  map, `ward_name`, `crew_name`, `has_photo` (stored only), `has_contact`, `merged_count`, `merged_into_ref`, `due_label` (date),
+  `overdue_days`, `version`; detail adds `photo_url` (only when stored), `status_url`, `merged_into { id, ref }`, `merged[]`,
+  `history[]` with `kind`, staff `text`, `internal`, and `copy_update` (`copy.js` matches the sentences). None.
+- **`PUT /api/staff/requests/:id`** (`index.js:518-578`): clarification 2's order up to the field checks; 409 `stale` carries the
+  full current StaffRequest in `request` (the app's Reload path needs exactly that); merged → 409 `bad_state`; no change → 200 same
+  version; crew entry before status entry; `closed_at` set, kept and cleared. None (apart from findings 1 and 3).
+- **Notes, candidates, merge** (`index.js:580-635`): 201 StaffRequest for notes (no version bump); candidates same category,
+  open, ≤ 200 m, with `distance_m`; merge answers `{ request, merged }`, `plus_ones += source + 1`, earlier merges re-pointed, errors
+  and fields as API.md. None (apart from findings 4 and 5).
+- **Crews, settings** (`index.js:637-652`): crews `{ id, name, active (boolean), open_count }`; settings with `sla_days` for every
+  key, null for no target. None.
+- **History texts** (`history.js`): every row of the table, public vs staff vs internal. None.
+- **Labels** (`time.js`): assembled from `formatToParts` per clarification 1. My M1 mock used `Intl.format(...).replace(',', '')`,
+  which on newer ICU gives a narrow no-break space before AM. It only runs in `?mock=1`, and M2's specs never read mock labels.
+  None for ts1.
+- **Migrations and `wrangler.toml`:** ids from 1001, `submission_id UNIQUE`, `status_key UNIQUE`, one photo per request, history
+  keeps both texts; no `[vars]`, no `TEST_MODE`; `[assets] ../app/public` with `run_worker_first = ["/api/*"]`. None.
+
+### What the staff app will need that is missing or awkward
+- **"Type a reference" for Join:** there is no lookup by ref. The app can parse `HP-1003` → id 1003 and `GET` the detail before the
+  confirm (404 → "We can't find that report."). Workable, no change asked.
+- Nothing else. Everything on the board, detail, Save, stale, notes, copy update, status link, photo, merged list and join is in
+  the M1 routes above.
+
+## Harness boot against the real Worker (M2a step 3)
+- `npx playwright test --list` (from `app/`): loads `playwright.config.mjs`, "Total: 0 tests in 0 files", exit 1 ("No tests found":
+  the specs are M2).
+- `E2E_PORT=8503 node tests/start-worker.mjs` (started once, pid 4186315): wiped and migrated `app/tests/.state-8503`, then
+  `wrangler dev --local` on 8503 with inspector 8513 and `TEST_MODE:1`. `/api/town` answered after about 4 s:
+  `HTTP/1.1 200 OK`, `Content-Type: application/json; charset=utf-8`, `Cache-Control: no-store`, `referrer-policy: no-referrer`,
+  `x-content-type-options: nosniff`, body starting `{"name":"SAMPLE Town of Harbour Pond (demo)","sample":true,…`.
+  `POST /api/test/reset` answered `{"pin":"3690","crews":[…3 SAMPLE crews…]}`, so `TEST_MODE` reached the Worker. The same Worker
+  served the app: `GET /` 200 `text/html`, `GET /s/` 200.
+- Stopped with `SIGTERM` to that pid only (start-worker forwards it to wrangler): the process exited and ports 8503 and 8513 were
+  closed afterwards.
