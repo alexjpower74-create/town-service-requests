@@ -584,3 +584,48 @@ same-crew and error-order fixes are ts1's, and join by typed reference is approv
 
 ### Left
 - Nothing asked for in M3c is open. The app mock (`?mock=1`) still has no staff routes; no spec uses it.
+
+## M3d — 2026-09-14 (attribution test race)
+
+`git rebase main` onto `691a331` (M3c merged): clean.
+
+### The failure and its cause
+Final QA at `691a331` had one failure: `[webkit-1280] targets.spec.mjs:151` "the resident map shows the OpenFreeMap attribution with its
+three links", at `link.scrollIntoViewIfNeeded` ("Element is not attached to the DOM"), after that link had already passed
+`toBeVisible` and `toHaveText`.
+- **The swap:** when the map's `load` event fires, the maplibre-gl-leaflet binding runs `removeAttribution` then `addAttribution`
+  (`app/public/vendor/maplibre/leaflet-maplibre-gl.js:135-138`), and Leaflet redraws the attribution control, replacing the three
+  `<a>` nodes.
+- **The race:** in WebKit that event can land in the middle of the test's per-link loop.
+- **A second race behind it:** `map.js` sets `data-style-loaded="1"` on `style.load` as well as `load`, and `style.load` fires first.
+  So the flag alone can come up just before the binding's swap.
+
+People see nothing wrong; the fix is in the test only.
+
+### Fix (DONE)
+The attribution check is the only place any spec or helper checks the attribution links. A grep for `leaflet-control-attribution`,
+`openfreemap.org`, `openmaptiles` and `openstreetmap.org/copyright` found only it; the other hits are the network guard, the style
+fixture and control (e)'s break anchor.
+- **First it waits for the settled map:** `mapReady(page)`, which is `#map[data-style-loaded="1"]`, or `data-base-map="unavailable"`
+  without WebGL.
+- **Then, for each of the three links,** the same four checks run together inside `expect(async () => …).toPass({ timeout: 10 s })`,
+  and the link is looked up again on every try: visible, the exact text, scrolled into view, and not covered (the `elementFromPoint`
+  hit-test).
+- **Nothing is loosened:** all three links, their text, visible, not covered, and "Data from".
+
+### Proof
+- `--repeat-each 20` of that test on **webkit-1280: 20 passed, 0 failed**, and on **chromium-1280: 20 passed, 0 failed** (40 of 40,
+  1.1 min, 8503).
+- **`negative-attribution.mjs` still goes red** (log line 1837):
+  - the unbroken copy passed (1 passed);
+  - the broken copy (`ATTRIBUTION = ''`) went red after the `toPass` time ran out, at "attribution link OpenFreeMap … element(s) not
+    found".
+
+  So the wait and the retries don't hide a missing attribution.
+- **Whole suite, all four projects on 8503** (4.8 min), pass / fail / skip per project:
+  - chromium-390: **42 / 0 / 0**
+  - chromium-1280: **40 / 0 / 0**
+  - webkit-390: **42 / 0 / 0**
+  - webkit-1280: **40 / 0 / 0**
+
+  **164 of 164.**
