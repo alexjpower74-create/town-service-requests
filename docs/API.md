@@ -347,3 +347,18 @@ tab or CR gets a leading `'`. **No reporter name, phone, description or notes.**
     (after its retries), never a 500. (ts2 finding 5)
 14. **Joining by typed reference:** there is no lookup-by-ref route. The app parses `HP-1003` → id 1003 and loads
     `GET /api/staff/requests/1003` before its confirm (404 → the API's message). (ts2 cross-review)
+15. **Messages the contract didn't give (M2):** unknown status keys 429 "Too many report links that don't work. Wait 10 minutes and try
+    again."; bad `week` 400 field `week` "Pick a week." (`week=` empty = the current week); crew `active` not a boolean 400 field `active`
+    "Say whether the crew is working."; unknown crew 404 "We can't find that crew."; seed with another scenario 400 field `scenario`.
+    (ts1 M2b)
+16. **Crew PUT** needs both `name` and `active` and checks fields before the id (400 before 404). (ts1 M2b)
+17. **PIN change:** `new_pin` is checked first (4–8 digits, as a string), then `current_pin`. A wrong `current_pin` is 401 **with field
+    `current_pin`** and does not count toward the sign-in guard. **The staff app must not treat that 401 as signed out**: "Sign in
+    again." 401s have no `field`. (ts1 M2b)
+18. **Rate guards run after validation and after the duplicate lookup**: a malformed report never uses up the allowance, and a resend
+    or an already-counted phone is never refused. Windows are `(now − window, now]`. (ts1 M2b)
+19. **CSV columns:** `Status` is the status label ("Won't fix"); `Due` is a date-time like the other dates; `Plus ones` and `Days to
+    close` are numbers (`3.2`), `Days to close` empty while open; the file ends with CRLF. (ts1 M2b)
+20. **Photo answers** also send `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox` (the demo photos are
+    SVG drawings served from the app's origin). The demo seed's pins and texts are deterministic; its keys are random; its first request
+    is HP-1001. (ts1 M2b)
