@@ -1,0 +1,75 @@
+/* Town Service Requests design tokens (PLAN.md, Design). Daylight civic: calm, plain, high contrast, nothing decorative.
+   System fonts only. Every text/background pair here is at least 4.5 : 1. */
+:root {
+  color-scheme: light;
+  --ground: #f5f7f9;
+  --surface: #ffffff;
+  --line: #d6dde3;
+  --ink: #14212b;
+  --muted: #56636f;
+  --accent: #0a5c8a;       /* harbour blue, white text on it */
+  --accent-ink: #ffffff;
+  --accent-soft: #e6f0f7;
+  --field-edge: #7b8794;   /* input borders: 3 : 1 against white for non-text contrast */
+
+  --emergency-bg: #fdecea;
+  --emergency-ink: #8a1c12;
+  --emergency-edge: #e3a59d;
+
+  --st-new: #0a5c8a;
+  --st-assigned: #5b21b6;
+  --st-in_progress: #92400e;
+  --st-done: #166534;
+  --st-wont_fix: #44403c;
+  --st-merged: #57534e;
+
+  --overdue: #b91c1c;
+  --error: #b91c1c;
+
+  --sample-ink: #92400e;
+  --sample-bg: #fff7ed;
+  --sample-edge: #f59e0b;
+
+  --disabled-bg: #e4e9ed;
+  --disabled-ink: #56636f;
+
+  --radius: 12px;
+  --tap: 44px;       /* the floor for anything a resident taps */
+  --primary: 56px;   /* primary buttons */
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+a { color: var(--accent); }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+  white-space: nowrap; border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
