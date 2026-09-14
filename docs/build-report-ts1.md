@@ -336,3 +336,95 @@ required, exit 0** (the eleven earlier ones plus batchguard and mergegiveup), ru
 ### Still not proven
 Nothing I know of. The me-too and photo batches chain on `changes() = 1` rather than a refusing guard. Their duplicate paths are
 covered by API tests: a same-device tap, a second photo PUT, and M1's three simultaneous same-device taps.
+
+## Cross-review of ts2 M2
+Read-only, from `rig/ts2` at `ea82e84`, against docs/API.md with clarifications 1–20: `app/public/staff/staff.js`, `app/public/api.js`,
+the M2 diff of `app/public/report.js` (`1757f0c..ea82e84`), `app/tests/helpers.mjs`, and the specs' arrangements. No server started,
+nothing in `app/**` edited. Severity is mine.
+
+### Findings
+1. **Medium: saving after adding a note can silently undo someone else's change.** `staff.js:332` sets `state.detail` to the note
+   answer, which carries the report's *current* version and fields. `staff.js:334-336` then refreshes only the history and the copy
+   text; the status, crew and message inputs keep what was rendered earlier. `save()` (`staff.js:298-304`) builds the body from that
+   newer `state.detail`: `version` is the new one, and every input that differs from the *new* values counts as a change.
+   - **How it happens:**
+     1. Staff A opens HP-1001 (v1, New, no crew).
+     2. Staff B assigns crew 1 (v2).
+     3. A adds a note: `state.detail` becomes v2, but A's form still shows New and No crew.
+     4. A types a public message and presses Save.
+     5. The body is `{ version: 2, status: "new", crew_id: null, public_message: "…" }`. The Worker accepts it (200), and B's
+        assignment is undone with no "Someone else changed this report" warning.
+   - **Nothing in the Worker can catch it:** the client sends the version it has just been given.
+   - **Suggested fix:** keep the version the form was rendered with (the panel already has `data-version`, `staff.js:238`), or
+     re-render the form (or show the stale box) when the note answer's version differs from it.
+   - **Suggested spec:** open a card, change the report through the API, add a note in the UI, save → expect 409 and the stale box.
+2. **Low:** a Save, Add note or Join that meets an ended session throws a TypeError after the sign-in screen is already showing.
+   - **Why:** `api.js:69-72` fires `SIGNED_OUT` synchronously before throwing. `showSignin` then `closeDetail()` empties the panel,
+     so the catch blocks write to elements that no longer exist: `$('save-error')` (`staff.js:319`, a 401 has no `field`),
+     `$('err-text')` (`staff.js:338`) and `$('join-confirm-error')` (`staff.js:429`) are null.
+   - **What people see:** the right screen. Only the console shows an uncaught rejection.
+3. **Low:** Reload after a stale 409 (`staff.js:445`) shows the report from the 409 body but doesn't call `loadBoard()`. That
+   report's card stays in its old column, with its old overdue text, until the next board load. A successful save does reload
+   (`staff.js:311`).
+4. **Low, observation:** `due_at` and `due_label` are read nowhere, neither on the cards (`staff.js:143-153`) nor in the detail
+   (`staff.js:245-248`). PLAN.md doesn't ask for a due date, but staff can't see when a report falls due until it is already
+   overdue. Worth deciding for M3.
+5. **Low:** the typed-reference join can show its confirm for a report that is itself joined (`staff.js:404-414`). The merge then
+   answers 409 with "HP-x was itself joined with HP-y. Join with HP-y instead.", shown in `#join-confirm-error` (`staff.js:429`),
+   so the outcome is correct. The detail answer already has `status: "merged"` and `merged_into`, so the confirm could say it first.
+6. **Low:** crews load once per board visit (`staff.js:125`). A crew deactivated from another session still shows in the select;
+   picking it gets 400 "Pick one of the crews.", shown next to the crew (`staff.js:316-317`). Handled; for M3's Settings screen,
+   reload crews after changes.
+
+### Checks that are clean (none)
+- **Method, path, body, headers, query** (`api.js:96-107`):
+  - signin `POST {pin}` without a token; signout `POST`;
+  - requests `GET` with only the set filters (`api.js:80-85`: `''`, `null` and `false` dropped; `overdue` `'1'`; `min_age_days`
+    `3`/`7`/`30`, `staff.js:10`);
+  - detail `GET`; save `PUT {version, …changed}`; notes `POST {text}`; candidates `GET`; merge `POST {into_id: Number}`;
+  - crews and settings `GET`;
+  - every staff route sends `Authorization: Bearer`, ids are encoded, and there are no `X-Test-*` headers in app code.
+- **Response fields read** all exist with those names and types:
+  - board: `counts`, `id`, `ref`, `status`, `age_days`, `category`, `category_label`, `location_label`, `plus_ones`, `crew_name`,
+    `has_photo`, `overdue`, `overdue_days` (`staff.js:143-166`);
+  - detail: `version`, `status_label`, `ward_name`, `created_label`, `closed_label`, `merged_into.{id,ref}`,
+    `merged[].{ref,created_label,plus_ones,description,reporter_name,reporter_phone,photo_url}`, `photo`, `photo_url`,
+    `public_message`, `copy_update`, `status_url`, `history[].{at_label,text,internal}`, `lat`, `lng`, `crew_id`
+    (`staff.js:198-289`);
+  - candidates: `requests[].{id,ref,category_label,location_label,distance_m,status_label,plus_ones}` (`staff.js:356`);
+  - crews: `crews[].{id,name,active}` (`staff.js:202-203`); merge: `request` (`staff.js:424`).
+- **401 handling** (`api.js:65-73`): only a 401 without `field` clears the token and signs out. Sign-in uses `call()`
+  (`api.js:97`), so a wrong PIN (401, field `pin`) and a 429 stay on the sign-in form with the API's text (`staff.js:78-81`). A
+  future `current_pin` 401 (field `current_pin`) won't sign anyone out, as long as M3's PIN change goes through `staff()`.
+- **Stale 409** (`staff.js:313-315`, `445`): recognised by `code === 'stale'` and `body.request`; Reload renders that StaffRequest,
+  version included. Only finding 1 gets around it.
+- **Save sends only changed fields, against clarifications 10 and 12** (`staff.js:297-304`):
+  - the crew is sent only when it changes, so "a crew auto-assigns only when it changes" (10) holds, and a deactivated current crew
+    (shown "(not active)", `staff.js:203`) is never re-sent;
+  - the message is compared trimmed, so whitespace-only edits aren't sent, and an untrimmed change is trimmed by the Worker;
+  - field errors land on the three inputs (`staff.js:316-317`) in the Worker's order (12): "Pick a crew first." next to the crew,
+    "Say why…" next to the message (a `wont_fix` with an existing message is accepted because the Worker checks the resulting
+    message);
+  - the only bad interaction is finding 1.
+- **Merge and join by typed reference** (`staff.js:383-432`): the candidate list comes from `candidates`. A typed `HP-1003`,
+  `hp-1003` or `1003` loads `GET /api/staff/requests/1003` before the confirm (clarification 14); its 404 text shows. Joining
+  with itself is stopped with the API's wording; the clarification 13 409 and the "itself joined" 409 show in the confirm.
+- **Board** shows the API's own `counts` (`staff.js:159`, `164`), which match the cards because no status filter is sent, and
+  `overdue` / `overdue_days` as given, never worked out on the phone (`staff.js:146`, `151`, `247`).
+- **report.js M2** (`1757f0c..ea82e84`): all four M1 findings are fixed.
+  - "Near …" now comes from `GET /api/town/locate`, debounced 300 ms; only the latest pin's answer shows, and a failure hides the
+    hint (`report.js:118-137`, `162`).
+  - The description counter counts code points like the Worker (`report.js:22`, `370`).
+  - "Me too" is removed after a 409/404 (`report.js:281`).
+  - 413/415 offer "Take a different one", which re-sends the same `submission_id` and gets a fresh token (`report.js:452-462`,
+    `354`). This fits the M2b rule that a resend is never refused by the create guard.
+- **Rate guards against the specs: nothing trips.** The auto `seed` fixture resets before every test (`helpers.mjs:60-64`), which
+  clears the attempts table, so only counts within one test matter.
+  - **Busiest test:** `shots.spec.mjs:55` makes 9 reports, but each is dated to a different past day with `at:`
+    (`shots.spec.mjs:58-80`). No hour holds more than 2 (both `days(2)`, `:72` and `:80`), and a dated attempt never counts
+    against a real-time one.
+  - **Next highest:** `targets.spec.mjs:96` makes 6 at real time and `staff.spec.mjs:22` makes 5.
+  - **Other guards:** "Me too" at most 4 (`shots.spec.mjs:17-18,66-67`), wrong PINs 1 (`staff.spec.mjs:11`), unknown status links
+    1 (`status.spec.mjs:36`). Status-page re-checks use good keys, which aren't counted.
+  - **Watch for later:** a test that makes 11 or more reports at real time, or 6 wrong PINs, will now get 429. Spread them with
+    `at:` or give `makeRequest` an `X-Test-IP`.
