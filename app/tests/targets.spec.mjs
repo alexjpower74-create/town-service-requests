@@ -1,7 +1,7 @@
 // Tap targets, the SAMPLE badge, no sideways scroll, colour contrast, and the map attribution.
 import {
   test, expect, tap, typeText, choosePhoto, hitTest, contrast, rgb, api, makeRequest, north, staffToken, staffPut, mergeInto,
-  signIn, openCard, goView, statusPath, POINTS, TOWN_NAME,
+  signIn, openCard, goView, statusPath, mapReady, POINTS, TOWN_NAME,
 } from './helpers.mjs'
 
 // Every visible button (and link styled as one) inside `scope`: at least 44 px each way, primary buttons at least 56 px tall,
@@ -151,14 +151,21 @@ test('status chips, the emergency banner and primary buttons meet 4.5 : 1', asyn
 test('the resident map shows the OpenFreeMap attribution with its three links', async ({ page }) => {
   await page.goto('/')
   await tap(page, page.locator('[data-category="pothole"]'), 'Pothole')
+  // Wait for the base map to settle first: when the style loads, the maplibre-gl-leaflet binding removes and re-adds its
+  // attribution, and Leaflet redraws the control, replacing the three links (vendor/maplibre/leaflet-maplibre-gl.js:136-138).
+  await mapReady(page)
   const attribution = page.locator('#map .leaflet-control-attribution')
   await expect(attribution).toBeVisible()
   for (const [href, text] of [['https://openfreemap.org', 'OpenFreeMap'], ['https://www.openmaptiles.org/', '© OpenMapTiles'], ['https://www.openstreetmap.org/copyright', 'OpenStreetMap']]) {
-    const link = attribution.locator(`a[href="${href}"]`)
-    await expect(link, `attribution link ${href}`).toBeVisible()
-    await expect(link).toHaveText(text)
-    await link.scrollIntoViewIfNeeded()
-    expect((await hitTest(link)).hit, `${text} link is not covered`).toBe('')
+    // The same four checks as before, retried together, re-querying the link each try, in case a redraw still lands after the
+    // style flag: visible, the right text, scrolled into view, and not covered.
+    await expect(async () => {
+      const link = attribution.locator(`a[href="${href}"]`)
+      await expect(link, `attribution link ${href}`).toBeVisible({ timeout: 1000 })
+      await expect(link).toHaveText(text, { timeout: 1000 })
+      await link.scrollIntoViewIfNeeded({ timeout: 1000 })
+      expect((await hitTest(link)).hit, `${text} link is not covered`).toBe('')
+    }, `attribution link ${text}`).toPass({ timeout: 10_000 })
   }
   await expect(attribution).toContainText('Data from')
 })

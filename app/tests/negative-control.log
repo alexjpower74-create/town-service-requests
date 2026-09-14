@@ -1834,3 +1834,53 @@ RESULT red as expected (unbroken passed, broken failed)
     [chromium-1280] › tests/staff.spec.mjs:164:1 › a Save after adding a note never undoes a change made meanwhile: it answers 409 and shows the stale box 
 
 
+== 2026-09-14T22:15:54.433Z attribution: map.js passes an empty customAttribution (and the no-WebGL fallback adds nothing)
+   spec: playwright test targets.spec.mjs --project chromium-1280 -g attribution on 8506, copy in app/.negative/attribution
+   unbroken copy: exit 0;   ✓  1 [chromium-1280] › tests/targets.spec.mjs:151:1 › the resident map shows the OpenFreeMap attribution with its three links (612ms) |   1 passed (5.4s)
+   broken copy: exit 1 -> RED as expected: the check is wired
+  1) [chromium-1280] › tests/targets.spec.mjs:151:1 › the resident map shows the OpenFreeMap attribution with its three links 
+
+    Error: attribution link OpenFreeMap
+
+    attribution link https://openfreemap.org
+
+    expect(locator).toBeVisible() failed
+
+    Locator: locator('#map .leaflet-control-attribution').locator('a[href="https://openfreemap.org"]')
+    Expected: visible
+    Timeout: 1000ms
+    Error: element(s) not found
+
+    Call log:
+      - attribution link https://openfreemap.org locator('#map .leaflet-control-attribution').locator('a[href="https://openfreemap.org"]') with timeout 1000ms
+      - waiting for locator('#map .leaflet-control-attribution').locator('a[href="https://openfreemap.org"]')
+
+
+    Call Log:
+    - Timeout 10000ms exceeded while waiting on the predicate
+
+      166 |       await link.scrollIntoViewIfNeeded({ timeout: 1000 })
+      167 |       expect((await hitTest(link)).hit, `${text} link is not covered`).toBe('')
+    > 168 |     }, `attribution link ${text}`).toPass({ timeout: 10_000 })
+          |                                    ^
+      169 |   }
+      170 |   await expect(attribution).toContainText('Data from')
+      171 | })
+        at <repo>/app/tests/targets.spec.mjs:168:36
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    .negative/attribution/results/targets-the-resident-map-s-4f495-bution-with-its-three-links-chromium-1280/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: .negative/attribution/results/targets-the-resident-map-s-4f495-bution-with-its-three-links-chromium-1280/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    .negative/attribution/results/targets-the-resident-map-s-4f495-bution-with-its-three-links-chromium-1280/trace.zip
+    Usage:
+
+        npx playwright show-trace .negative/attribution/results/targets-the-resident-map-s-4f495-bution-with-its-three-links-chromium-1280/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+
