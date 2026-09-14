@@ -113,3 +113,70 @@ switches.
 ### Needs from other slices
 Nothing. For ts2: absolute URLs use the request's origin (`http://127.0.0.1:<port>`), and `reported_label` in `nearby` is the
 date-only label (`"Mon Sep 7"`) as API.md shows; everywhere else `reported_label`/`created_label`/`closed_label` are full labels.
+
+## M2a (2026-09-14)
+
+Rebased on main (`13d8a77`, ts2 M1 + API.md clarifications 1–9) with no conflicts.
+
+### `GET /api/town/locate` (clarification 9): DONE
+`src/index.js` `locate`: `{ inside, location_label, ward }` from the same `pointInRing`, `locationLabel` and `wardOf` the create
+route uses; outside the boundary still 200 with `inside: false` and the label and ward it would have had; `lat`/`lng` missing, empty
+or not a number → 400 `bad_request` field `location` "Put a pin on the map where the problem is."; no rate guard;
+`Cache-Control: no-store` (every API JSON answer has it). `nearby` now shares the same `queryNumber` parser.
+API test `town locate: the Worker's own inside, street label and ward for a pin`: inside_centre → inside, ward centre; on_street →
+exactly `{ inside: true, location_label: "Airbase Road", ward: "north" }` and a report made at that pin stores the same label;
+far_from_streets_inside → `"Not near a named street"`, ward south; outside_south and outside_east_of_boundary → `inside: false` with a
+non-empty label; `lat=abc`, missing `lng`, empty `lat` → 400 field `location` with the exact message; the header is `no-store`.
+`npm test`: **unit 17 pass, API 34 pass, 0 fail.** No negative control for this route (none asked); the assertions are exact values
+from the lead's fixtures, so a different geometry rule would have to reproduce Airbase Road and the 150 m miss to stay green.
+
+## Cross-review of ts2 M1
+Read-only, against docs/API.md with clarifications 1–9: `app/public/api.js`, `api.mock.js`, `report.js`, `s/status.js`, plus the
+three helpers they lean on (`ui.js` uuid/deviceId, `geo.js` nearestStreetByPoint, `s/index.html` referrer meta). Severity is mine.
+
+**Request bodies, query params and headers against the real Worker: none wrong.**
+- `POST /api/requests` body `report.js:370-380` has every field with the right types; `submission_id` made once per report
+  (`report.js:82`) and reused on every resend and photo retry; `device_id` from `ui.js:55-62` (UUID v4, including the
+  `getRandomValues` fallback, which sets the version and variant bits correctly). Untrimmed strings are fine, the Worker trims.
+- `GET nearby` `api.js:64` category/lat/lng encoded; `POST me-too` `api.js:65` `{ device_id }`; `GET status` `api.js:66`.
+- `PUT photo` `api.js:63`: `Authorization: Bearer`, `Content-Type` from the blob (always `image/jpeg` from `report.js:301`), the absolute
+  `upload_url` reduced to a same-origin path. `fetch(..., { cache: 'no-store' })` `api.js:38`.
+- `/s/` sets `<meta name="referrer" content="no-referrer">` (`s/index.html:6`).
+
+**Response fields read: none wrong.** Create: `ref`, `status_url`, `category_label`, `location_label`, `reported_label` (full label),
+`photo`, `upload_url`, `upload_token` (`report.js:384,399,413-415`). Nearby: `requests[].id, ref, category, category_label,
+location_label, status, status_label, reported_label` (date label, clarification 8), `distance_m`, `plus_ones` (`report.js:218-231`).
+Me-too: `ref`, `status_url`, `duplicate` (`report.js:248-251`). Status: every field `s/status.js:14-45` reads exists with that name and
+type; `updated_at !== reported_at` compares two ISO strings from the same source, which is right. Errors: `error`, `code`, `field`
+(`api.js:17-24`); labels are shown as given, never recomputed.
+
+**Status codes: 401 / 404 / 409 / 413 / 415 fine; 429 fine for when M2 adds it.**
+- 400 on send: `report.js:352-361` puts `description`/`name`/`phone` errors next to their inputs and everything else (`location`,
+  `outside_boundary`, `category`, `submission_id`, `device_id`, `has_photo`) under Send. Fine.
+- Photo `report.js:408-422`: 401 (expired token) hides the reason and "Try the photo again" re-sends the same `submission_id`, which
+  gets a fresh token from the duplicate path. That is exactly the contract. 413/415 show the API text.
+- 404 on status `s/status.js:74-77` shows the API's message and stops re-checking, so an unknown link does not keep spending the
+  unknown-key rate guard on every `visibilitychange`. Good.
+- 429 (M2): every path shows `e.message`; on the status page an existing card is kept (`s/status.js:78`). Fine.
+
+**Findings**
+1. **Low, known and covered by clarification 9:** `report.js:135-136` shows "Near {street}" from `nearestStreetByPoint` (`geo.js:51`),
+   which measures to **one point per street** with a **250 m** limit. The Worker measures to street **segments** with a **150 m**
+   limit, so the phone can say "Near Main Street" while the stored `location_label` (and the status link) say another street or "Not
+   near a named street". A picked search result (`report.js:190`) is shown as that street, and the Worker will agree unless another
+   street's segment is closer at that point. `GET /api/town/locate` is live on this branch for ts2 M2.
+2. **Low:** `report.js:338` counts description length with `.trim().length` (UTF-16 units) and `api.mock.js:129,132` does the same for
+   description and name; the Worker counts code points (`[...s].length`). With emoji the counter says "over 500" and the mock refuses
+   while the real Worker accepts. It never lets through something the Worker refuses.
+3. **Low:** `report.js:253-256` re-enables **Me too** after a 409 `bad_state` ("This report is already closed.") or a 404, so tapping it
+   again only repeats the same error. Hiding the button on 409/404 would read better.
+4. **Low:** `report.js:419-421` offers "Try the photo again" after 413/415, which re-sends the same blob and must fail the same way;
+   "Take a different one" fits those two codes. Unlikely in practice after the 1600 px / 0.7 shrink.
+5. **Mock only, low** (no Playwright spec uses the mock): `api.mock.js:122-124` looks up the duplicate **before** validating, so an
+   invalid resend answers `duplicate: true` where the Worker answers 400 (the Worker validates the whole body, boundary included,
+   then looks up); `api.mock.js:124` refuses `device_id: null`, which the Worker accepts; `api.mock.js:128` turns a non-string
+   description into `''` where the Worker gives 400; `api.mock.js:162-163` checks 415 before 413 (clarification 5 says 413 first);
+   `api.mock.js:32` builds the time part with `Intl.format`, which gives a narrow no-break space before AM on newer ICU (clarification
+   1 says a plain space); no upload-token expiry; no `/api/town/locate` yet.
+
+Nothing in ts2 M1 needs a Worker change.
