@@ -48,6 +48,14 @@ touched, and is gated on printed `*_EXIT=` lines.
    change, an NL midnight between download and API fetch, a report falling due mid-run). Sent to ts2 (DECISIONS 21). Tonight's runs were
    outside every window, which is exactly why no run caught it.
 
+10. **A rare race in the attribution test** (final QA at `691a331`, 1 failure in 164): on webkit-1280 the OpenFreeMap link passed
+    `toBeVisible` and `toHaveText`, then `scrollIntoViewIfNeeded` failed with "Element is not attached to the DOM". Cause: when the map
+    style loads, the maplibre-gl-leaflet binding removes and re-adds its attribution (`vendor/maplibre/leaflet-maplibre-gl.js:136-138`),
+    so Leaflet re-renders the control and replaces the three links mid-loop. People see nothing (same text, still visible). A targeted
+    repeat at the same pin passed 20/20 (10 each on webkit-1280 and chromium-1280), which is what a rare race looks like. Sent to ts2 as a
+    test fix: wait for the base map to settle (`data-style-loaded` or the no-WebGL fallback) before the per-link checks, prove it with
+    `--repeat-each 20`, and show `negative-attribution` still goes red.
+
 ## Lead checks by eye
 - ts2 M1 screenshots (resident home 390, nearby 390, status 1280): SAMPLE on every screen, banner first, no private fields on status.
 - ts2 M2 real-Worker screenshots (staff board 1280, detail 390, join confirm 1280): overdue edges and counts right, `tel:` contact,
