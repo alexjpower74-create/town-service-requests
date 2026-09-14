@@ -637,7 +637,7 @@ async function updateRequest (ctx, id) {
   try {
     await db.batch([
       db.prepare('UPDATE requests SET status = ?, crew_id = ?, public_message = ?, closed_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND version = ?')
-        .bind(status, crewId, message, closedAt, at, id, row.version),
+        .bind(status, crewId, message, closedAt, at, id, body.version), // the version this client saw, not the one just read
       guardOneChange(db),
       ...entries.map(e => historyStmt(db, id, at, e))
     ])

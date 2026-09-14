@@ -724,6 +724,31 @@ test('PUT: a stale version is 409 with the current request', async () => {
   assert.equal(r.body.request.crew_name, ROADS)
 })
 
+test('PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing', async () => {
+  await reset()
+  const c = await create()
+  const token = await signin()
+  const first = await put(token, c.id, { version: 1, crew_id: 1, public_message: 'First save (SAMPLE).' })
+  assert.equal(first.status, 200, first.text)
+  assert.equal(first.body.version, 2)
+  const historyAfterFirst = first.body.history.map(h => [h.kind, h.text])
+
+  const later = at(T0, 60000)
+  const second = await put(token, c.id, { version: 1, status: 'done', public_message: 'Second save (SAMPLE).' }, later)
+  expectError(second, 409, 'stale', undefined, 'Someone else changed this report. Reload to see their change.')
+  assert.equal(second.body.request.version, 2)
+  assert.equal(second.body.request.public_message, 'First save (SAMPLE).')
+
+  const d = await detail(token, c.id, later)
+  assert.equal(d.version, 2)
+  assert.equal(d.status, 'assigned')
+  assert.equal(d.public_message, 'First save (SAMPLE).')
+  assert.equal(d.closed_at, null)
+  assert.deepEqual(d.history.map(h => [h.kind, h.text]), historyAfterFirst, 'the losing save wrote no history')
+  const s = await status(`/api/status/${c.status_key}`)
+  assert.ok(!s.text.includes('Marked done') && !s.text.includes('Second save'))
+})
+
 test('PUT: closed_at is set when closed, kept from done to won\'t fix, and cleared when reopened', async () => {
   await reset()
   const c = await create()

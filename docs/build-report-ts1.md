@@ -295,3 +295,44 @@ The six M1 controls were re-run on this commit and are still red. The five new o
 - Clarification 13's give-up path (409 after the retries) is code only: no test can force three lost races through the API. It
   sits behind the same in-batch guard noted as unproven in M1.
 - No screenshot: M2b has no screen. The seed test is the proof that the demo data exists and its photos load.
+
+## M2c (2026-09-14)
+
+Rebased on main at `b85b4da` (clarifications 15–20). Work in `980cb78`. The two refusal paths I called unproven in M1 and M2b
+have now been seen to fire, in copies only, with no switch in shipped code.
+
+### `negative:batchguard`: DONE, and it found a real gap first
+New API test: `PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing`. The second save, with
+the old version, must get 409 `stale`, and the version, status, public message, `closed_at`, history and status page must all be
+unchanged. `negative-lib.mjs` gained a `setup` step that patches the copy for both phases.
+- **First run (logged at `b85b4da +uncommitted`): phase A did NOT pass.**
+  - With the early `if (body.version !== row.version) throw await stale()` removed, the stale second save got **200** and wrote
+    "Marked done" and its message.
+  - Cause: the PUT's `UPDATE … WHERE version = ?` was bound to `row.version`, the version this request had just read, not
+    `body.version`, the client's. So the in-batch guard only covered the milliseconds between one request's read and its write;
+    a client's stale version was caught by the early check alone.
+  - The M1 race probe (one 200, one 409) could not tell which layer answered. Now we know the guard never did it on its own.
+- **Fix:** the UPDATE binds `body.version`. Behind the early check the two are always equal, so shipped behaviour is identical
+  (`npm test` unchanged, now 50 API). The guard now defends the client's version even if the early check is ever lost.
+- **Phase A (setup: early check removed): PASS.** The in-batch guard alone answers 409 `stale`, and the batch rolls back, so there
+  is no history, no version bump and no status change.
+- **Phase B (break: `guardOneChange` → `SELECT 1`): RED.** The loser gets 200. Its UPDATE matched nothing (version still 2,
+  status still assigned), but its "Marked done" and "Public message: Second save (SAMPLE)." history rows were written onto the
+  report. That is exactly the damage the guard exists to stop.
+
+### `negative:mergegiveup`: DONE
+Test file `tests/merge-giveup.test.mjs`, which `npm test` does not run: it only passes on a copy whose merge always loses.
+- **Phase A (setup: the merge batch binds `source.version - 1`): PASS.** After its retries, the merge answers exactly
+  `{ "error": "Someone else changed one of these reports. Reload and try again.", "code": "bad_state" }` (409). Both reports'
+  staff details are deep-equal to before: status, `merged_into`, `plus_ones`, `merged_count`, versions and history. The source's
+  status page still has `merged_into: null`.
+- **Phase B (break: the final `throw badState(…)` → `throw e`): RED.** The merge answers 500 `server_error`.
+
+### Verified
+`npm test` at `980cb78`: **unit 21 pass, API 50 pass, 0 fail.** `npm run negative` at `980cb78`: **all 13 controls RED as
+required, exit 0** (the eleven earlier ones plus batchguard and mergegiveup), run on 8502 and 8505 only.
+`tests/negative-control.log` keeps batchguard's first NOT RED run beside the passing ones as the record of the gap it found.
+
+### Still not proven
+Nothing I know of. The me-too and photo batches chain on `changes() = 1` rather than a refusing guard. Their duplicate paths are
+covered by API tests: a same-device tap, a second photo PUT, and M1's three simultaneous same-device taps.
