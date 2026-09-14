@@ -73,3 +73,27 @@ touched, and is gated on printed `*_EXIT=` lines.
   a junction, so the label is right. The "Not near a named street" cards in the e2e screenshots come from test arrangements, not the seed.
 - `npm run demo` from main at `fb199ec` on a spare port (8507): migrations, wrangler, seed of 24 SAMPLE requests, links printed;
   `/`, `/s/`, `/staff/`, `/api/town` all 200; a printed status link returns HP-1001 with no private fields. Stopped after.
+
+## Known gaps and v2 ideas
+
+- **One shared staff PIN.** Everyone at the town office signs in with the same PIN, so history says "Town office", not who made a change.
+  Per-person staff accounts (and who changed what) are the first v2 item for a real council.
+- **Nothing is sent.** Staff copy the update text; residents keep their status link. Texting or emailing residents needs an SMS or
+  email account and consent wording (v2, Alexander's call).
+- **Street search is the town's own street list,** not a geocoder: no house numbers, no landmarks. The SAMPLE boundary is a hand-drawn
+  shape, the wards are bands, and the streets come from z14 vector tiles (about a metre of precision). A real town needs its own
+  boundary, wards (or none) and streets rebuilt with `tools/`.
+- **The staff board doesn't refresh on its own;** it reloads after each save, note, join or filter change. Two people at the counter see
+  each other's changes on their next action (a stale save is refused, never silently applied).
+- **Rate limits are per IP,** which is blunt behind a carrier's shared address (10 reports an hour from one IP, then "call the town office").
+- **"Me too" is counted once per phone per report,** not across a merged pair (DECISIONS 7).
+- **Residents need signal to send.** There is no offline queue on the report page; the photo retry and resend are safe, but nothing is
+  stored for later.
+- **Tests use a stand-in base map** (a local style fixture, no internet), so real OpenFreeMap tiles are only seen when a person opens the
+  demo online. Tested in Playwright's chromium and webkit at phone and desktop sizes, not on a physical phone.
+- **Accessibility** is checked for contrast (4.5 : 1 on chips, banner and primary buttons), tap-target size and hit-testing; there has been
+  no screen-reader pass.
+- **OpenFreeMap's public instance** is free for commercial use with no key and no limits, but has no SLA; `MAP_STYLE_URL` moves the map to
+  self-hosted or paid tiles.
+- **Before any real town uses it:** its own name (the SAMPLE badge follows the name), boundary and streets, a changed PIN, its real phone
+  numbers, and an ATIPPA privacy notice for the name, phone and photo residents may give (`docs/DEPLOY.md`).
