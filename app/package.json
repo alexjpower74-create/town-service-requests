@@ -1,0 +1,17 @@
+{
+  "name": "town-service-requests-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "@maplibre/maplibre-gl-leaflet": "0.1.4",
+    "leaflet": "1.9.4",
+    "leaflet.markercluster": "1.5.3",
+    "maplibre-gl": "5.24.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

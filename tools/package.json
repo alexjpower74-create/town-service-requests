@@ -1,0 +1,10 @@
+{
+  "name": "town-service-requests-tools",
+  "private": true,
+  "type": "module",
+  "description": "Lead-owned data tools: build data/town.json from OpenFreeMap vector tiles (see DECISIONS.md).",
+  "dependencies": {
+    "@mapbox/vector-tile": "3.0.0",
+    "pbf": "5.1.2"
+  }
+}

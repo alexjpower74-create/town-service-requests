@@ -1,0 +1,14 @@
+{
+  "name": "town-service-requests",
+  "private": true,
+  "type": "module",
+  "description": "Residents report town problems with a pin and a photo; the town office works them from a board. Local build; see README.md.",
+  "scripts": {
+    "demo": "node demo.mjs",
+    "town": "cd tools && node build-town.mjs",
+    "test:worker": "cd worker && npm test",
+    "test:negative": "cd worker && npm run negative",
+    "test:e2e": "cd app && npx playwright test",
+    "test:e2e-negative": "cd app && npm run negative"
+  }
+}

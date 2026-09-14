@@ -1,0 +1,30 @@
+{
+  "note": "Fixed points for tests. [lat, lng]. Offsets for the 40 m / 60 m nearby tests are made in the tests by moving north: 1 metre = 1 / 111195.0797 degrees of latitude on the 6 371 008.8 m sphere.",
+  "inside_centre": [
+    49.1395,
+    -55.352
+  ],
+  "outside_south": [
+    49.1,
+    -55.352
+  ],
+  "outside_east_of_boundary": [
+    49.142,
+    -55.32
+  ],
+  "on_street": {
+    "point": [
+      49.150177,
+      -55.34564
+    ],
+    "street": "Airbase Road",
+    "nearest_other_street_m": 74
+  },
+  "far_from_streets_inside": {
+    "point": [
+      49.117,
+      -55.3705
+    ],
+    "nearest_street_m": 330
+  }
+}
