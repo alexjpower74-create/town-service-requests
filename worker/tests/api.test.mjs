@@ -5,6 +5,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID, randomBytes } from 'node:crypto'
 import { POINTS } from './test-points.js'
+import { pointInRing } from '../src/geo.js'
+import { TOWN } from '../src/town-data.js'
 
 const BASE = process.env.BASE || `http://127.0.0.1:${process.env.PORT || 8502}`
 const T0 = '2026-09-07T13:15:00.000Z' // Mon Sep 7, 10:45 AM NDT
@@ -861,6 +863,460 @@ test('copy_update text exact for assigned with a message', async () => {
   const fresh = await create()
   assert.equal((await detail(token, fresh.id)).copy_update,
     `${TOWN_NAME}: update on your report ${fresh.ref} (Pothole, ${fresh.location_label}). We have your report. Follow it here: ${fresh.status_url}`)
+})
+
+test('PUT: re-sending the current crew of a new request is no change (clarification 10)', async () => {
+  await reset()
+  const c = await create()
+  const token = await signin()
+  await putOk(token, c.id, { crew_id: 1 })
+  const reopened = await putOk(token, c.id, { status: 'new' })
+  assert.equal(reopened.crew_id, 1)
+  const r = await put(token, c.id, { version: reopened.version, crew_id: 1 })
+  assert.equal(r.status, 200, r.text)
+  assert.equal(r.body.status, 'new')
+  assert.equal(r.body.version, reopened.version)
+  const moved = await put(token, c.id, { version: reopened.version, crew_id: 2 })
+  assert.equal(moved.body.status, 'assigned')
+})
+
+test('a malformed escape in a key is a 404, not a 500 (clarification 11)', async () => {
+  await reset()
+  expectError(await api('GET', '/api/status/%E0%A4%A'), 404, 'not_found', undefined, "We can't find that report. Check the link, or call the town office.")
+  expectError(await api('GET', '/api/photos/%E0%A4%A'), 404, 'not_found', undefined, "We can't find that photo.")
+})
+
+// ---- M2: PIN, crews, settings ----
+
+test('PIN change: the old PIN is refused after, the new one works, other sessions keep working', async () => {
+  await reset()
+  const a = await signin()
+  const b = await signin()
+  const change = (token, body) => api('PUT', '/api/staff/pin', { token, body })
+  expectError(await api('PUT', '/api/staff/pin', { body: { current_pin: '3690', new_pin: '2468' } }), 401, 'unauthorized', undefined, 'Sign in again.')
+  for (const bad of ['123', '123456789', '12a4', 2468, '', ' 2468']) {
+    expectError(await change(a, { current_pin: '3690', new_pin: bad }), 400, 'bad_request', 'new_pin', 'Use 4 to 8 digits.')
+  }
+  expectError(await change(a, { current_pin: '1111', new_pin: '2468' }), 401, 'unauthorized', 'current_pin', 'That PIN is not right.')
+  const r = await change(a, { current_pin: '3690', new_pin: '2468' })
+  assert.equal(r.status, 200, r.text)
+  assert.deepEqual(r.body, { ok: true })
+  expectError(await api('POST', '/api/staff/signin', { body: { pin: '3690' } }), 401, 'unauthorized', 'pin', 'That PIN is not right.')
+  assert.equal((await api('POST', '/api/staff/signin', { body: { pin: '2468' } })).status, 200)
+  assert.equal((await api('GET', '/api/staff/crews', { token: b })).status, 200, 'the other session still works')
+  assert.equal((await api('GET', '/api/staff/crews', { token: a })).status, 200, 'the changing session still works')
+  assert.equal((await change(b, { current_pin: '2468', new_pin: '12345678' })).status, 200)
+  assert.equal((await api('POST', '/api/staff/signin', { body: { pin: '12345678' } })).status, 200)
+  await reset()
+  assert.equal((await api('POST', '/api/staff/signin', { body: { pin: '3690' } })).status, 200, 'reset restores the SAMPLE PIN')
+})
+
+test('crews: add, rename, deactivate; a deactivated crew stays on its requests but cannot be picked', async () => {
+  await reset()
+  const token = await signin()
+  const post = body => api('POST', '/api/staff/crews', { token, body })
+  const putCrew = (id, body) => api('PUT', `/api/staff/crews/${id}`, { token, body })
+  for (const name of ['', '   ', 'x'.repeat(41), 7, undefined]) {
+    expectError(await post({ name }), 400, 'bad_request', 'name', 'Give the crew a name.')
+  }
+  expectError(await api('POST', '/api/staff/crews', { body: { name: 'No token (SAMPLE)' } }), 401, 'unauthorized')
+  let r = await post({ name: '  Sidewalk crew (SAMPLE)  ' })
+  assert.equal(r.status, 201, r.text)
+  assert.deepEqual(r.body, { id: 4, name: 'Sidewalk crew (SAMPLE)', active: true, open_count: 0 })
+  assert.equal((await post({ name: 'y'.repeat(40) })).status, 201)
+
+  const c = await create()
+  await putOk(token, c.id, { crew_id: 4 })
+  r = await putCrew(4, { name: ' Sidewalks (SAMPLE) ', active: false })
+  assert.equal(r.status, 200, r.text)
+  assert.deepEqual(r.body, { id: 4, name: 'Sidewalks (SAMPLE)', active: false, open_count: 1 })
+  expectError(await putCrew(4, { name: 'Sidewalks (SAMPLE)', active: 'no' }), 400, 'bad_request', 'active')
+  expectError(await putCrew(4, { name: 'Sidewalks (SAMPLE)' }), 400, 'bad_request', 'active')
+  expectError(await putCrew(4, { name: '', active: true }), 400, 'bad_request', 'name', 'Give the crew a name.')
+  expectError(await putCrew(99, { name: 'Nobody (SAMPLE)', active: true }), 404, 'not_found')
+
+  const d = await detail(token, c.id)
+  assert.equal(d.crew_id, 4)
+  assert.equal(d.crew_name, 'Sidewalks (SAMPLE)', 'the deactivated crew stays on its request')
+  const keep = await put(token, c.id, { version: d.version, crew_id: 4, status: 'in_progress' })
+  assert.equal(keep.status, 200, keep.text)
+  const other = await create()
+  expectError(await put(token, other.id, { version: 1, crew_id: 4 }), 400, 'bad_request', 'crew_id', 'Pick one of the crews.')
+  const crews = (await api('GET', '/api/staff/crews', { token })).body.crews
+  assert.deepEqual(crews.map(x => [x.id, x.active]), [[1, true], [2, true], [3, true], [4, false], [5, true]])
+  assert.equal((await putCrew(4, { name: 'Sidewalks (SAMPLE)', active: true })).status, 200)
+  assert.equal((await put(token, other.id, { version: 1, crew_id: 4 })).status, 200, 'active again, it can be picked')
+})
+
+const GOOD_SETTINGS = {
+  emergency_phone: ' 709-555-0199 ',
+  office_phone: '(709) 555-0111',
+  office_hours: 'Monday to Thursday, 9 AM to 4 PM',
+  sla_days: { pothole: 14, streetlight: 10, snow: 1, water: 3, garbage: 365, tree: 5, other: null }
+}
+
+test('settings: validation per field', async () => {
+  await reset()
+  const token = await signin()
+  const putS = body => api('PUT', '/api/staff/settings', { token, body })
+  const phoneMsg = 'Type a phone number like 709-555-0100.'
+  const hoursMsg = 'Keep the office hours short.'
+  const slaMsg = 'Use 1 to 365 days, or leave it blank for no target.'
+  const { garbage, ...noGarbage } = GOOD_SETTINGS.sla_days
+  assert.equal(garbage, 365)
+  const sla = over => ({ sla_days: { ...GOOD_SETTINGS.sla_days, ...over } })
+  const cases = [
+    [{ emergency_phone: 'call us' }, 'emergency_phone', phoneMsg],
+    [{ emergency_phone: undefined }, 'emergency_phone', phoneMsg],
+    [{ office_phone: '555-01' }, 'office_phone', phoneMsg],
+    [{ office_phone: `709.555.0100${'.'.repeat(19)}` }, 'office_phone', phoneMsg],
+    [{ office_hours: '   ' }, 'office_hours', hoursMsg],
+    [{ office_hours: 'h'.repeat(121) }, 'office_hours', hoursMsg],
+    [sla({ pothole: 0 }), 'sla_days.pothole', slaMsg],
+    [sla({ snow: 366 }), 'sla_days.snow', slaMsg],
+    [sla({ water: 2.5 }), 'sla_days.water', slaMsg],
+    [sla({ tree: '5' }), 'sla_days.tree', slaMsg],
+    [{ sla_days: noGarbage }, 'sla_days.garbage', slaMsg],
+    [{ sla_days: null }, 'sla_days.pothole', slaMsg]
+  ]
+  for (const [over, field, msg] of cases) expectError(await putS({ ...GOOD_SETTINGS, ...over }), 400, 'bad_request', field, msg)
+  const unchanged = await api('GET', '/api/staff/settings', { token })
+  assert.equal(unchanged.body.emergency_phone, '709-555-0142')
+
+  const r = await putS({ ...GOOD_SETTINGS, office_hours: 'h'.repeat(120) })
+  assert.equal(r.status, 200, r.text)
+  assert.deepEqual(r.body, {
+    town_name: TOWN_NAME, emergency_phone: '709-555-0199', office_phone: '(709) 555-0111', office_hours: 'h'.repeat(120), sla_days: GOOD_SETTINGS.sla_days
+  })
+  const town = (await api('GET', '/api/town')).body
+  assert.equal(town.emergency_phone, '709-555-0199')
+  assert.equal(town.office_phone, '(709) 555-0111')
+  expectError(await api('PUT', '/api/staff/settings', { body: GOOD_SETTINGS }), 401, 'unauthorized')
+})
+
+test('settings: an SLA change flips overdue on read', async () => {
+  await reset()
+  const c = await create({ category: 'streetlight' }, at(T0, -11 * DAY))
+  const token = await signin()
+  const sla = async streetlight => {
+    const r = await api('PUT', '/api/staff/settings', { token, body: { ...GOOD_SETTINGS, sla_days: { ...GOOD_SETTINGS.sla_days, streetlight } } })
+    assert.equal(r.status, 200, r.text)
+  }
+  let d = await detail(token, c.id)
+  assert.equal(d.overdue, true)
+  assert.equal(d.overdue_days, 1)
+  await sla(12)
+  d = await detail(token, c.id)
+  assert.equal(d.overdue, false)
+  assert.equal(d.due_at, at(T0, DAY))
+  assert.equal((await list(token, '?overdue=1')).requests.length, 0)
+  await sla(null)
+  d = await detail(token, c.id)
+  assert.equal(d.overdue, false)
+  assert.equal(d.due_at, null)
+  assert.equal(d.due_label, null)
+  await sla(10)
+  assert.deepEqual((await list(token, '?overdue=1')).requests.map(x => x.id), [c.id])
+})
+
+// ---- M2: weekly report ----
+
+test('weekly report on a fake clock', async () => {
+  await reset()
+  const mk = (category, created) => create({ category, ...(category === 'other' ? { description: 'Report test (SAMPLE)' } : {}) }, created)
+  const close = async (id, when, status = 'done', message) =>
+    putOk(await signin(when), id, { status, ...(message ? { public_message: message } : {}) }, when)
+  const p0 = await mk('pothole', '2026-08-25T12:00:00.000Z')
+  await close(p0.id, '2026-09-06T12:00:00.000Z') // Sun Sep 6, 9:30 AM NDT: the week before
+  const p1 = await mk('pothole', '2026-09-07T12:00:00.000Z')
+  await close(p1.id, '2026-09-09T00:00:00.000Z') // 1.5 days
+  const p2 = await mk('pothole', '2026-09-08T00:00:00.000Z')
+  await close(p2.id, '2026-09-11T06:00:00.000Z', 'wont_fix', 'That lane is private (SAMPLE).') // 3.25 days
+  const p3 = await mk('pothole', '2026-08-31T12:00:00.000Z')
+  await close(p3.id, '2026-09-10T12:00:00.000Z') // 10 days, opened the week before
+  const s1 = await mk('streetlight', '2026-09-09T00:00:00.000Z')
+  await close(s1.id, '2026-09-09T06:00:00.000Z') // 0.25 days -> 0.3 half-up
+  const w1 = await mk('water', '2026-09-10T00:00:00.000Z')
+  const m1 = await mk('garbage', '2026-09-10T12:00:00.000Z')
+  const g1 = await mk('garbage', '2026-09-10T13:00:00.000Z')
+  const n1 = await mk('snow', '2026-09-14T02:00:00.000Z') // Sun Sep 13, 11:30 PM NDT
+  const t1 = await mk('tree', '2026-09-15T12:00:00.000Z')
+  const o1 = await mk('other', '2026-09-15T13:00:00.000Z')
+  const o2 = await mk('other', '2026-09-15T14:00:00.000Z')
+  const joined = await api('POST', `/api/staff/requests/${m1.id}/merge`, { token: await signin('2026-09-11T12:00:00.000Z'), body: { into_id: g1.id }, now: '2026-09-11T12:00:00.000Z' })
+  assert.equal(joined.status, 200, joined.text)
+
+  const NOW = '2026-09-16T15:00:00.000Z'
+  const token = await signin(NOW)
+  const weekly = async q => {
+    const r = await api('GET', `/api/staff/report/weekly${q}`, { token, now: NOW })
+    assert.equal(r.status, 200, r.text)
+    return r.body
+  }
+  const w = await weekly('?week=2026-09-07')
+  assert.equal(w.week_start, '2026-09-07')
+  assert.equal(w.week_label, 'Mon Sep 7 to Sun Sep 13')
+  const row = (category, opened, closed, avg) => ({ category, label: TOWN_LABELS[category], opened, closed, avg_days_to_close: avg })
+  assert.deepEqual(w.rows, [
+    row('pothole', 2, 3, 4.9), // (1.5 + 3.25 + 10) / 3 = 4.9167
+    row('streetlight', 1, 1, 0.3),
+    row('snow', 1, 0, null), // the Sunday 11:30 PM report
+    row('water', 1, 0, null),
+    row('garbage', 1, 0, null), // the merged duplicate is left out
+    row('tree', 0, 0, null),
+    row('other', 0, 0, null)
+  ])
+  // every closed request of the week: (1.5 + 3.25 + 10 + 0.25) / 4 = 3.75 -> 3.8 (a mean of the row means would be 2.6)
+  assert.deepEqual(w.totals, { opened: 6, closed: 4, avg_days_to_close: 3.8 })
+  assert.equal(w.open_now, 6)
+  assert.equal(w.overdue_now, 3) // water, garbage and snow are past their SLA at NOW
+  assert.deepEqual(w.oldest_open.map(x => x.id), [w1.id, g1.id, n1.id, t1.id, o1.id])
+  assert.equal(w.oldest_open[0].ref, w1.ref)
+  assert.equal(w.oldest_open[0].overdue, true)
+  assert.equal(w.oldest_open[1].plus_ones, 1)
+  assert.ok(!w.oldest_open.some(x => x.id === o2.id || x.id === m1.id))
+
+  const next = await weekly('?week=2026-09-14')
+  assert.deepEqual(next.rows.map(r => [r.category, r.opened, r.closed]), [
+    ['pothole', 0, 0], ['streetlight', 0, 0], ['snow', 0, 0], ['water', 0, 0], ['garbage', 0, 0], ['tree', 1, 0], ['other', 2, 0]
+  ])
+  assert.deepEqual(next.totals, { opened: 3, closed: 0, avg_days_to_close: null })
+  assert.equal(next.open_now, 6)
+  assert.equal((await weekly('')).week_start, '2026-09-14', 'default: the week containing now')
+  const before = await weekly('?week=2026-08-31')
+  assert.equal(before.rows[0].opened, 1)
+  assert.equal(before.rows[0].closed, 1, 'p0 closed on Sunday Sep 6 NL time')
+  assert.equal(before.totals.avg_days_to_close, 12)
+})
+const TOWN_LABELS = { pothole: 'Pothole', streetlight: 'Streetlight out', snow: 'Missed snow clearing', water: 'Water or sewer problem', garbage: 'Missed garbage pickup', tree: 'Fallen tree', other: 'Something else' }
+
+test('weekly report: NL week boundaries, the Sunday 11:30 PM request and the DST weeks', async () => {
+  await reset()
+  await create({ category: 'snow' }, '2026-09-14T02:00:00.000Z') // Sun Sep 13, 11:30 PM NDT = Mon Sep 14, 02:00 UTC
+  await create({ category: 'tree' }, '2026-09-14T02:30:00.000Z') // Mon Sep 14, 12:00 AM NDT exactly
+  const NOW = '2026-09-16T12:00:00.000Z'
+  const token = await signin(NOW)
+  const weekly = async (q, now = NOW) => {
+    const r = await api('GET', `/api/staff/report/weekly${q}`, { token, now })
+    assert.equal(r.status, 200, r.text)
+    return r.body
+  }
+  const pick = w => ({ week_start: w.week_start, week_label: w.week_label, start_at: w.start_at, end_at: w.end_at })
+  const earlier = await weekly('?week=2026-09-07')
+  assert.deepEqual(pick(earlier), { week_start: '2026-09-07', week_label: 'Mon Sep 7 to Sun Sep 13', start_at: '2026-09-07T02:30:00.000Z', end_at: '2026-09-14T02:30:00.000Z' })
+  assert.deepEqual(earlier.rows.map(r => r.opened), [0, 0, 1, 0, 0, 0, 0], 'the Sunday 11:30 PM report counts in the earlier week')
+  const later = await weekly('?week=2026-09-14')
+  assert.deepEqual(later.rows.map(r => r.opened), [0, 0, 0, 0, 0, 1, 0], 'midnight Monday NL time starts the next week')
+  assert.equal((await weekly('?week=2026-09-13')).week_start, '2026-09-07', 'a Sunday belongs to the week that started on Monday')
+  assert.equal((await weekly('', '2026-09-14T02:00:00.000Z')).week_start, '2026-09-07', 'now is still Sunday in NL')
+  assert.equal((await weekly('', '2026-09-14T02:30:00.000Z')).week_start, '2026-09-14')
+
+  assert.deepEqual(pick(await weekly('?week=2026-10-28')), {
+    week_start: '2026-10-26', week_label: 'Mon Oct 26 to Sun Nov 1', start_at: '2026-10-26T02:30:00.000Z', end_at: '2026-11-02T03:30:00.000Z'
+  }, 'the week the clocks fall back is 7 days and 1 hour long')
+  assert.deepEqual(pick(await weekly('?week=2026-03-08')), {
+    week_start: '2026-03-02', week_label: 'Mon Mar 2 to Sun Mar 8', start_at: '2026-03-02T03:30:00.000Z', end_at: '2026-03-09T02:30:00.000Z'
+  }, 'the week the clocks spring forward is 7 days less 1 hour')
+
+  for (const bad of ['2026-02-30', '2026-9-7', 'abc', '2026-13-01']) {
+    expectError(await api('GET', `/api/staff/report/weekly?week=${bad}`, { token, now: NOW }), 400, 'bad_request', 'week')
+  }
+})
+
+// ---- M2: CSV ----
+
+test('CSV export: header, CRLF, quoting, formula guard and NL-date filename', async () => {
+  await reset()
+  const a = await create({ ...at2(POINTS.on_street.point) })
+  const b = await create({ category: 'streetlight' }, at(T0, HOUR))
+  const c = await create({ category: 'snow', ...at2(POINTS.far_from_streets_inside.point) }, at(T0, 2 * HOUR))
+  const token = await signin()
+  await putOk(token, a.id, { crew_id: 1, public_message: 'He said "fix it", please' })
+  await putOk(token, b.id, { public_message: '=SUM(A1)' })
+  const closedAt = at(T0, 3.25 * DAY)
+  await putOk(await signin(closedAt), c.id, { status: 'wont_fix', public_message: '@crew' }, closedAt)
+
+  const NOW = '2026-09-11T02:00:00.000Z' // Thu Sep 10, 11:30 PM NDT (already Sep 11 in UTC)
+  const t2 = await signin(NOW)
+  const r = await api('GET', '/api/staff/export.csv', { token: t2, now: NOW })
+  assert.equal(r.status, 200, r.text)
+  assert.equal(r.headers.get('content-type'), 'text/csv; charset=utf-8')
+  assert.equal(r.headers.get('content-disposition'), 'attachment; filename="harbour-pond-requests-2026-09-10.csv"')
+  assert.ok(r.text.endsWith('\r\n'))
+  assert.ok(!r.text.replace(/\r\n/g, '').includes('\n'), 'every line ends with CRLF')
+  const lines = r.text.split('\r\n')
+  assert.equal(lines.pop(), '')
+  assert.deepEqual(lines, [
+    'Reference,Category,Location,Ward,Status,Crew,Plus ones,Reported,Due,Overdue,Closed,Days to close,Public message',
+    `HP-1001,Pothole,${POINTS.on_street.street},North Ward (SAMPLE),Assigned,${ROADS},0,2026-09-07 10:45,2026-09-21 10:45,No,,,"He said ""fix it"", please"`,
+    `HP-1002,Streetlight out,${b.location_label},Centre Ward (SAMPLE),New,,0,2026-09-07 11:45,2026-09-17 11:45,No,,,'=SUM(A1)`,
+    "HP-1003,Missed snow clearing,Not near a named street,South Ward (SAMPLE),Won't fix,,0,2026-09-07 12:45,2026-09-09 12:45,No,2026-09-10 16:45,3.2,'@crew"
+  ])
+  const closedOnly = await api('GET', '/api/staff/export.csv?status=closed', { token: t2, now: NOW })
+  assert.deepEqual(closedOnly.text.split('\r\n').map(l => l.split(',')[0]), ['Reference', 'HP-1003', ''])
+  expectError(await api('GET', '/api/staff/export.csv?category=volcano', { token: t2, now: NOW }), 400, 'bad_request', 'category')
+  expectError(await api('GET', '/api/staff/export.csv', { now: NOW }), 401, 'unauthorized')
+})
+
+test("CSV export never contains the reporter's name, phone, description or note text", async () => {
+  await reset()
+  const c = await create({ name: 'Zebediah Quillfeather (SAMPLE)', phone: '709-555-0177', description: 'MARMOSET by the hydrant (SAMPLE)' })
+  const token = await signin()
+  assert.equal((await api('POST', `/api/staff/requests/${c.id}/notes`, { token, body: { text: 'PANGOLIN internal note' } })).status, 201)
+  await putOk(token, c.id, { public_message: 'Booked for Friday (SAMPLE).' })
+  const r = await api('GET', '/api/staff/export.csv', { token })
+  assert.equal(r.status, 200)
+  for (const s of ['Zebediah', 'Quillfeather', '709-555-0177', '5550177', '555-0177', 'MARMOSET', 'hydrant', 'PANGOLIN', 'internal note', c.submission.device_id]) {
+    assert.ok(!r.text.includes(s), `CSV must not contain ${JSON.stringify(s)}`)
+  }
+  assert.ok(r.text.includes('Booked for Friday (SAMPLE).'))
+  assert.equal(r.text.split('\r\n')[0].split(',').length, 13)
+})
+
+// ---- M2: rate guards ----
+
+test('rate guard: 10 new reports per IP per rolling hour', async () => {
+  await reset()
+  const send = (body, ip, now) => api('POST', '/api/requests', { body, ip, now })
+  const first = report()
+  assert.equal((await send(first, 'ip-a', T0)).status, 201)
+  for (let i = 1; i < 10; i++) assert.equal((await send(report(), 'ip-a', at(T0, i * 60000))).status, 201)
+  const limitMsg = "That's a lot of reports from one phone in a short time. Please call the town office."
+  expectError(await send(report(), 'ip-a', at(T0, 30 * 60000)), 429, 'rate_limited', undefined, limitMsg)
+  const resend = await send(first, 'ip-a', at(T0, 30 * 60000))
+  assert.equal(resend.status, 200, 'a resend of a report already made is not refused')
+  assert.equal(resend.body.duplicate, true)
+  assert.equal((await send(report(), 'ip-b', at(T0, 30 * 60000))).status, 201, 'another IP is unaffected')
+  expectError(await send(report(), 'ip-a', at(T0, HOUR - 1)), 429, 'rate_limited')
+  assert.equal((await send(report(), 'ip-a', at(T0, HOUR))).status, 201, 'the first report has left the rolling hour')
+  expectError(await send(report(), 'ip-a', at(T0, HOUR)), 429, 'rate_limited')
+  const token = await signin(at(T0, HOUR))
+  assert.equal((await list(token, '', at(T0, HOUR))).requests.length, 12)
+  await reset()
+  assert.equal((await send(report(), 'ip-a', at(T0, HOUR))).status, 201, 'reset clears the guard')
+})
+
+test('rate guard: 30 "Me too" taps per IP per rolling hour', async () => {
+  await reset()
+  const c = await create()
+  const tap = (deviceId, ip, now = T0) => api('POST', `/api/requests/${c.id}/me-too`, { body: { device_id: deviceId }, ip, now })
+  const firstDevice = randomUUID()
+  assert.equal((await tap(firstDevice, 'ip-m')).status, 201)
+  for (let i = 1; i < 30; i++) assert.equal((await tap(randomUUID(), 'ip-m', at(T0, i * 1000))).status, 201)
+  expectError(await tap(randomUUID(), 'ip-m', at(T0, 60000)), 429, 'rate_limited', undefined, "That's a lot of taps from one phone. Please call the town office.")
+  const again = await tap(firstDevice, 'ip-m', at(T0, 60000))
+  assert.equal(again.status, 200, 'a phone already counted is answered as a duplicate')
+  assert.equal(again.body.duplicate, true)
+  assert.equal((await tap(randomUUID(), 'ip-n', at(T0, 60000))).status, 201, 'another IP is unaffected')
+  assert.equal((await tap(randomUUID(), 'ip-m', at(T0, HOUR))).status, 201, 'the first tap has left the rolling hour')
+  const token = await signin(at(T0, HOUR))
+  assert.equal((await detail(token, c.id, at(T0, HOUR))).plus_ones, 32)
+})
+
+test('rate guard: 5 wrong PINs per IP per 15 minutes', async () => {
+  await reset()
+  const signinAs = (pin, ip, now) => api('POST', '/api/staff/signin', { body: { pin }, ip, now })
+  for (let i = 0; i < 4; i++) expectError(await signinAs('0000', 'ip-p', at(T0, i * 1000)), 401, 'unauthorized', 'pin')
+  assert.equal((await signinAs('3690', 'ip-p', at(T0, 4000))).status, 200, 'a right PIN is not counted')
+  expectError(await signinAs('0000', 'ip-p', at(T0, 5000)), 401, 'unauthorized', 'pin')
+  expectError(await signinAs('3690', 'ip-p', at(T0, 6000)), 429, 'rate_limited', undefined, 'Too many tries. Wait 15 minutes and try again.')
+  assert.equal((await signinAs('3690', 'ip-q', at(T0, 6000))).status, 200, 'another IP is unaffected')
+  expectError(await signinAs('3690', 'ip-p', at(T0, 15 * 60000 - 1)), 429, 'rate_limited') // the first wrong PIN is still inside
+  assert.equal((await signinAs('3690', 'ip-p', at(T0, 15 * 60000 + 1000))).status, 200, 'the first wrong PIN has left the window')
+  await reset()
+  for (let i = 0; i < 5; i++) await signinAs('0000', 'ip-r', T0)
+  expectError(await signinAs('3690', 'ip-r', T0), 429, 'rate_limited')
+  await reset()
+  assert.equal((await signinAs('3690', 'ip-r', T0)).status, 200, 'reset clears the guard')
+})
+
+test('rate guard: 30 unknown status links per IP per 10 minutes, then even good links', async () => {
+  await reset()
+  const c = await create()
+  const key = new URL(c.status_url).searchParams.get('k')
+  const look = (k, ip, now = T0) => api('GET', `/api/status/${k}`, { ip, now })
+  for (let i = 0; i < 5; i++) assert.equal((await look(key, 'ip-s')).status, 200, 'good links are not counted')
+  for (let i = 0; i < 30; i++) expectError(await look(`nope-${i}`, 'ip-s', at(T0, i * 1000)), 404, 'not_found')
+  const r = await look(key, 'ip-s', at(T0, 30000))
+  expectError(r, 429, 'rate_limited')
+  assert.ok(!r.text.includes(c.ref), 'a refused good link shows nothing of the report')
+  assert.equal((await look(key, 'ip-t', at(T0, 30000))).status, 200, 'another IP is unaffected')
+  expectError(await look(key, 'ip-s', at(T0, 10 * 60000 - 1)), 429, 'rate_limited') // the first unknown link is still inside
+  assert.equal((await look(key, 'ip-s', at(T0, 10 * 60000 + 1000))).status, 200, 'the first unknown link has left the window')
+})
+
+// ---- M2: demo seed ----
+
+test('demo seed: every status and category, overdue ones, a merged pair, photos that load', async () => {
+  const NOW = '2026-09-14T15:00:00.000Z'
+  expectError(await api('POST', '/api/test/seed', { body: { scenario: 'party' }, now: NOW }), 400, 'bad_request', 'scenario')
+  const r = await api('POST', '/api/test/seed', { body: { scenario: 'demo' }, now: NOW })
+  assert.equal(r.status, 200, r.text)
+  assert.deepEqual(Object.keys(r.body).sort(), ['pin', 'requests'])
+  assert.equal(r.body.pin, '3690')
+  const seeded = r.body.requests
+  assert.ok(seeded.length >= 20 && seeded.length <= 30, String(seeded.length))
+  for (const x of seeded) {
+    assert.deepEqual(Object.keys(x).sort(), ['id', 'ref', 'status', 'status_url'])
+    assert.equal(x.ref, `HP-${x.id}`)
+    assert.equal(new URL(x.status_url).origin, new URL(BASE).origin)
+    assert.equal(new URL(x.status_url).pathname, '/s/')
+  }
+
+  const token = await signin(NOW)
+  const details = await Promise.all(seeded.map(x => detail(token, x.id, NOW)))
+  assert.deepEqual(details.map(d => d.status), seeded.map(x => x.status))
+  assert.deepEqual([...new Set(details.map(d => d.status))].sort(), ['assigned', 'done', 'in_progress', 'merged', 'new', 'wont_fix'])
+  assert.deepEqual([...new Set(details.map(d => d.category))].sort(), ['garbage', 'other', 'pothole', 'snow', 'streetlight', 'tree', 'water'])
+  assert.ok(details.filter(d => d.overdue).length >= 2, 'at least two overdue')
+  const board = await list(token, '', NOW)
+  for (const [status, n] of Object.entries(board.counts)) assert.ok(n > 0, `the ${status} column has requests`)
+
+  const merged = details.filter(d => d.status === 'merged')
+  assert.ok(merged.length >= 1)
+  const target = details.find(d => d.id === merged[0].merged_into.id)
+  assert.notEqual(target.status, 'merged')
+  assert.ok(target.merged.some(m => m.id === merged[0].id))
+  assert.equal(target.history.filter(h => h.kind === 'merged_in').length, merged.filter(m => m.merged_into.id === target.id).length)
+  const mergedStatus = await api('GET', new URL(seeded.find(x => x.id === merged[0].id).status_url).pathname.replace('/s/', '/api/status/') +
+    new URL(seeded.find(x => x.id === merged[0].id).status_url).searchParams.get('k'), { now: NOW })
+  assert.equal(mergedStatus.body.merged_into.ref, target.ref)
+
+  assert.ok(details.some(d => d.crew_name), 'crews')
+  assert.ok(details.some(d => d.public_message), 'public messages')
+  assert.ok(details.some(d => d.history.some(h => h.kind === 'note' && h.internal)), 'internal notes')
+  assert.ok(details.some(d => d.plus_ones > 0), '"Me too" counts')
+  assert.ok(details.some(d => d.reporter_name) && details.some(d => d.reporter_phone), 'names and phones on some')
+  const floor = Date.parse(NOW) - 35 * DAY
+  for (const d of details) {
+    assert.ok(Date.parse(d.created_at) >= floor && Date.parse(d.created_at) <= Date.parse(NOW), `${d.ref} within five weeks`)
+    assert.ok(d.history.every(h => h.at >= d.created_at && Date.parse(h.at) <= Date.parse(NOW)), `${d.ref} history in order`)
+    assert.equal(d.history[0].kind, 'created')
+    assert.ok(pointInRing([d.lat, d.lng], TOWN.boundary), `${d.ref} inside the boundary`)
+    assert.ok(d.description === null || d.description.endsWith('(SAMPLE)'), d.description)
+    assert.ok(d.reporter_name === null || d.reporter_name.includes('SAMPLE'), d.reporter_name)
+    assert.ok(d.reporter_phone === null || /^709-555-01\d\d$/.test(d.reporter_phone), d.reporter_phone)
+    if (d.crew_id !== null) assert.ok(d.crew_name.includes('SAMPLE'))
+    if (['assigned', 'in_progress'].includes(d.status)) assert.notEqual(d.crew_id, null, `${d.ref} has a crew`)
+    if (d.status === 'wont_fix') assert.ok(d.public_message, `${d.ref} says why`)
+    assert.equal(d.closed_at === null, ['new', 'assigned', 'in_progress'].includes(d.status), `${d.ref} closed_at`)
+  }
+  assert.ok(details.filter(d => d.location_label !== 'Not near a named street').length >= 20, 'pins sit on the real streets')
+
+  const withPhotos = details.filter(d => d.photo_url)
+  assert.ok(withPhotos.length >= 3)
+  for (const d of withPhotos) {
+    const p = await api('GET', d.photo_url, { now: NOW })
+    assert.equal(p.status, 200)
+    assert.equal(p.headers.get('content-type'), 'image/svg+xml')
+    assert.match(p.headers.get('content-security-policy'), /default-src 'none'/)
+    assert.ok(p.text.startsWith('<svg') && p.text.includes('SAMPLE photo') && !/<script|href=|xlink/i.test(p.text), d.ref)
+  }
+
+  const again = await api('POST', '/api/test/seed', { body: { scenario: 'demo' }, now: NOW })
+  assert.equal(again.body.requests.length, seeded.length)
+  const t3 = await signin(NOW)
+  assert.equal((await list(t3, '?status=merged', NOW)).requests.length + (await list(t3, '', NOW)).requests.length, seeded.length, 'seeding twice does not double up')
 })
 
 test('unknown API routes answer 404 JSON', async () => {

@@ -4,12 +4,14 @@
 import { TOWN } from './town-data.js'
 import { CATEGORIES, CATEGORY_KEYS, categoryLabel, STATUS_LABELS, BOARD_STATUSES, OPEN_STATUSES, CLOSED_STATUSES, isOpen } from './lists.js'
 import { haversine, pointInRing, wardOf, locationLabel } from './geo.js'
-import { dateLabel, fullLabel } from './time.js'
-import { dueAt, isOverdue, overdueDays, ageDays, daysToClose } from './sla.js'
+import { dateLabel, fullLabel, nlDate, weekOf, parseIsoDate } from './time.js'
+import { dueAt, isOverdue, overdueDays, ageDays, daysToClose, meanDaysHalfUp } from './sla.js'
 import { now as clockNow, clientIp, isTestMode } from './clock.js'
-import { randomKey, sha256Hex, verifyPin, isUuidV4 } from './auth.js'
+import { randomKey, sha256Hex, hashPin, verifyPin, isUuidV4 } from './auth.js'
 import * as H from './history.js'
 import { copyUpdate } from './copy.js'
+import { toCsv } from './csv.js'
+import { seedDemo } from './seed.js'
 import { SAMPLE_PIN, SAMPLE_CREWS, resetStatements } from './sample.js'
 
 const NEARBY_METRES = 50
@@ -44,6 +46,25 @@ const badState = error => new HttpError(409, 'bad_state', error)
 const unauthorized = (error, field) => new HttpError(401, 'unauthorized', error, field ? { field } : {})
 const NOT_FOUND_REPORT = "We can't find that report."
 const PHONE_MESSAGE = 'Something went wrong on this phone. Reload the page and try again.'
+
+// ---- rate guards (per IP, rolling windows; /api/test/reset clears them) ----
+
+const RATE = {
+  create: { windowMs: 3600000, limit: 10, error: "That's a lot of reports from one phone in a short time. Please call the town office." },
+  me_too: { windowMs: 3600000, limit: 30, error: "That's a lot of taps from one phone. Please call the town office." },
+  pin: { windowMs: 15 * 60000, limit: 5, error: 'Too many tries. Wait 15 minutes and try again.' },
+  status: { windowMs: 10 * 60000, limit: 30, error: "Too many report links that don't work. Wait 10 minutes and try again." }
+}
+
+/** 429 when this IP already has `limit` attempts of `kind` in the window (now − window, now]. */
+async function rateGuard (ctx, kind) {
+  const r = RATE[kind]
+  const row = await ctx.db.prepare('SELECT COUNT(*) AS n FROM attempts WHERE kind = ? AND ip = ? AND at > ? AND at <= ?')
+    .bind(kind, ctx.ip, iso(ctx.now - r.windowMs), iso(ctx.now)).first()
+  if (row.n >= r.limit) throw new HttpError(429, 'rate_limited', r.error)
+}
+
+const attemptStmt = (ctx, kind) => ctx.db.prepare('INSERT INTO attempts (kind, ip, at) VALUES (?, ?, ?)').bind(kind, ctx.ip, iso(ctx.now))
 
 async function readJson (request) {
   const text = await request.text()
@@ -288,6 +309,7 @@ async function createRequest (ctx) {
   const v = validateReport(body)
   const existing = await findBySubmission(db, body.submission_id)
   if (existing) return duplicateResponse(ctx, existing)
+  await rateGuard(ctx, 'create') // a resend of a report already made is never refused
 
   const at = iso(ctx.now)
   const point = [body.lat, body.lng]
@@ -317,6 +339,7 @@ async function createRequest (ctx) {
     statements.push(db.prepare(`INSERT INTO upload_tokens (token_hash, request_id, created_at, expires_at) SELECT ?, id, ?, ? FROM (${byKey})`)
       .bind(await sha256Hex(upload.token), at, upload.expiresAt, statusKey))
   }
+  statements.push(attemptStmt(ctx, 'create'), db.prepare('DELETE FROM attempts WHERE at < ?').bind(iso(ctx.now - 86400000)))
   try {
     await db.batch(statements)
   } catch (e) {
@@ -404,13 +427,16 @@ async function meToo (ctx, id) {
   if (!isUuidV4(body.device_id)) throw badRequest('device_id', PHONE_MESSAGE)
   const row = await loadRow(db, id)
   if (!isOpen(row.status)) throw badState('This report is already closed.')
+  const known = await db.prepare('SELECT 1 FROM metoo_devices WHERE request_id = ? AND device_id = ?').bind(id, body.device_id).first()
+  if (!known) await rateGuard(ctx, 'me_too') // a phone already counted is answered as a duplicate, never refused
   const at = iso(ctx.now)
   const e = H.meToo()
   const results = await db.batch([
     db.prepare('INSERT INTO metoo_devices (request_id, device_id, reporter, at) VALUES (?, ?, 0, ?) ON CONFLICT DO NOTHING').bind(id, body.device_id, at),
     db.prepare(`UPDATE requests SET plus_ones = plus_ones + 1 WHERE id = ? AND status IN (${OPEN_SQL}) AND changes() = 1`).bind(id),
     db.prepare('INSERT INTO request_history (request_id, at, kind, public_text, staff_text, internal) SELECT ?, ?, ?, ?, ?, ? WHERE changes() = 1')
-      .bind(id, at, e.kind, e.public_text, e.staff_text, e.internal)
+      .bind(id, at, e.kind, e.public_text, e.staff_text, e.internal),
+    db.prepare('INSERT INTO attempts (kind, ip, at) SELECT ?, ?, ? WHERE changes() = 1').bind('me_too', ctx.ip, at)
   ])
   const added = results[1].meta.changes === 1
   const after = await db.prepare('SELECT plus_ones, status_key FROM requests WHERE id = ?').bind(id).first()
@@ -419,9 +445,13 @@ async function meToo (ctx, id) {
 
 async function publicStatus (ctx, key) {
   const { db } = ctx
-  const row = await db.prepare('SELECT r.*, t.status_key AS target_status_key FROM requests r LEFT JOIN requests t ON t.id = r.merged_into WHERE r.status_key = ?')
+  await rateGuard(ctx, 'status') // once tripped, even good links wait for the window
+  const row = key === null ? null : await db.prepare('SELECT r.*, t.status_key AS target_status_key FROM requests r LEFT JOIN requests t ON t.id = r.merged_into WHERE r.status_key = ?')
     .bind(key).first()
-  if (!row) throw notFound("We can't find that report. Check the link, or call the town office.")
+  if (!row) {
+    await attemptStmt(ctx, 'status').run()
+    throw notFound("We can't find that report. Check the link, or call the town office.")
+  }
   const [settings, history] = await Promise.all([
     loadSettings(db),
     db.prepare('SELECT at, public_text FROM request_history WHERE request_id = ? AND internal = 0 ORDER BY at, id').bind(row.id).all()
@@ -451,12 +481,19 @@ async function publicStatus (ctx, key) {
 }
 
 async function getPhoto (ctx, key) {
-  const row = await ctx.db.prepare('SELECT * FROM photos WHERE photo_key = ?').bind(key).first()
+  const row = key === null ? null : await ctx.db.prepare('SELECT * FROM photos WHERE photo_key = ?').bind(key).first()
   const object = row && await ctx.env.PHOTOS.get(key)
   if (!object) throw notFound("We can't find that photo.")
   return new Response(object.body, {
     status: 200,
-    headers: { 'content-type': row.content_type, 'cache-control': 'private, max-age=86400', 'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff' }
+    headers: {
+      'content-type': row.content_type,
+      'cache-control': 'private, max-age=86400',
+      'referrer-policy': 'no-referrer',
+      'x-content-type-options': 'nosniff',
+      // The demo photos are SVG: opened on their own they may never run script or load anything.
+      'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+    }
   })
 }
 
@@ -473,8 +510,12 @@ async function requireStaff (ctx) {
 
 async function signin (ctx) {
   const body = await readJson(ctx.request)
+  await rateGuard(ctx, 'pin') // once tripped, even the right PIN waits for the window
   const settings = await loadSettings(ctx.db)
-  if (!await verifyPin(typeof body.pin === 'string' ? body.pin : '', settings)) throw unauthorized('That PIN is not right.', 'pin')
+  if (!await verifyPin(typeof body.pin === 'string' ? body.pin : '', settings)) {
+    await attemptStmt(ctx, 'pin').run() // count the wrong PIN
+    throw unauthorized('That PIN is not right.', 'pin')
+  }
   const token = randomKey(24)
   const expiresAt = iso(ctx.now + SESSION_MS)
   await ctx.db.prepare('INSERT INTO staff_sessions (token_hash, created_at, expires_at) VALUES (?, ?, ?)')
@@ -509,17 +550,36 @@ function statusMatches (status, filter) {
   return status === filter
 }
 
-async function listRequests (ctx) {
+/** The board list and the CSV share this: every filter, counts (all filters but status), list order. Items are { s: summary, row }. */
+async function filteredRequests (ctx) {
   const f = listFilters(ctx.url.searchParams)
   const settings = await loadSettings(ctx.db)
   const { results } = await ctx.db.prepare(`${REQUEST_SELECT} ORDER BY r.created_at, r.id`).all()
-  const rows = results.map(r => summary(r, settings, ctx.now)).filter(s =>
+  const items = results.map(row => ({ row, s: summary(row, settings, ctx.now) })).filter(({ s }) =>
     (f.category === null || s.category === f.category) &&
     (f.ward === null || s.ward === f.ward) &&
     (f.minAge === null || s.age_days >= f.minAge) &&
     (f.overdue !== '1' || s.overdue))
-  const counts = Object.fromEntries(BOARD_STATUSES.map(st => [st, rows.filter(s => s.status === st).length]))
-  return json(200, { now: iso(ctx.now), now_label: fullLabel(ctx.now), counts, requests: rows.filter(s => statusMatches(s.status, f.status)) })
+  const counts = Object.fromEntries(BOARD_STATUSES.map(st => [st, items.filter(({ s }) => s.status === st).length]))
+  return { counts, items: items.filter(({ s }) => statusMatches(s.status, f.status)) }
+}
+
+async function listRequests (ctx) {
+  const { counts, items } = await filteredRequests(ctx)
+  return json(200, { now: iso(ctx.now), now_label: fullLabel(ctx.now), counts, requests: items.map(({ s }) => s) })
+}
+
+async function exportCsv (ctx) {
+  const { items } = await filteredRequests(ctx)
+  const body = toCsv(items.map(({ s, row }) => ({ ...s, public_message: row.public_message })))
+  return new Response(body, {
+    status: 200,
+    headers: {
+      'content-type': 'text/csv; charset=utf-8',
+      'content-disposition': `attachment; filename="harbour-pond-requests-${nlDate(ctx.now)}.csv"`,
+      ...API_HEADERS
+    }
+  })
 }
 
 async function getRequest (ctx, id) {
@@ -560,7 +620,7 @@ async function updateRequest (ctx, id) {
   }
   let status = row.status
   if (has(body, 'status')) status = body.status
-  else if (has(body, 'crew_id') && crewId !== null && row.status === 'new') status = 'assigned'
+  else if (crewId !== row.crew_id && crewId !== null && row.status === 'new') status = 'assigned' // only when the crew changes (clarification 10)
   if ((status === 'assigned' || status === 'in_progress') && crewId === null) throw badRequest('crew_id', 'Pick a crew first.')
   if (status === 'wont_fix' && !message) throw badRequest('public_message', 'Say why in the message to the public.')
 
@@ -638,17 +698,111 @@ async function mergeRequest (ctx, id, attempt = 0) {
     ])
   } catch (e) {
     // Someone changed either report between the read and the batch: nothing was written; decide again on fresh rows.
-    if (isGuardRefusal(e) && attempt < 2) return mergeRequest(ctx, id, attempt + 1)
-    throw e
+    if (!isGuardRefusal(e)) throw e
+    if (attempt < 2) return mergeRequest(ctx, id, attempt + 1)
+    throw badState('Someone else changed one of these reports. Reload and try again.') // clarification 13
   }
   const settings = await loadSettings(db)
   return json(200, { request: await staffDetail(ctx, target.id, settings), merged: await staffDetail(ctx, source.id, settings) })
 }
 
+const CREW_SELECT = `SELECT c.id, c.name, c.active,
+  (SELECT COUNT(*) FROM requests r WHERE r.crew_id = c.id AND r.status IN (${OPEN_SQL})) AS open_count FROM crews c`
+const crewView = c => ({ id: c.id, name: c.name, active: c.active === 1, open_count: c.open_count })
+
 async function listCrews (ctx) {
-  const { results } = await ctx.db.prepare(`SELECT c.id, c.name, c.active,
-    (SELECT COUNT(*) FROM requests r WHERE r.crew_id = c.id AND r.status IN (${OPEN_SQL})) AS open_count FROM crews c ORDER BY c.id`).all()
-  return json(200, { crews: results.map(c => ({ id: c.id, name: c.name, active: c.active === 1, open_count: c.open_count })) })
+  const { results } = await ctx.db.prepare(`${CREW_SELECT} ORDER BY c.id`).all()
+  return json(200, { crews: results.map(crewView) })
+}
+
+function crewNameFrom (value) {
+  const name = typeof value === 'string' ? value.trim() : ''
+  if (!name || chars(name) > 40) throw badRequest('name', 'Give the crew a name.')
+  return name
+}
+
+async function createCrew (ctx) {
+  const body = await readJson(ctx.request)
+  const name = crewNameFrom(body.name)
+  const { meta } = await ctx.db.prepare('INSERT INTO crews (name, active) VALUES (?, 1)').bind(name).run()
+  const crew = await ctx.db.prepare(`${CREW_SELECT} WHERE c.id = ?`).bind(meta.last_row_id).first()
+  return json(201, crewView(crew))
+}
+
+async function updateCrew (ctx, id) {
+  const body = await readJson(ctx.request)
+  const name = crewNameFrom(body.name)
+  if (typeof body.active !== 'boolean') throw badRequest('active', 'Say whether the crew is working.')
+  const { meta } = await ctx.db.prepare('UPDATE crews SET name = ?, active = ? WHERE id = ?').bind(name, body.active ? 1 : 0, id).run()
+  if (meta.changes !== 1) throw notFound("We can't find that crew.")
+  return json(200, crewView(await ctx.db.prepare(`${CREW_SELECT} WHERE c.id = ?`).bind(id).first()))
+}
+
+async function changePin (ctx) {
+  const body = await readJson(ctx.request)
+  if (typeof body.new_pin !== 'string' || !/^\d{4,8}$/.test(body.new_pin)) throw badRequest('new_pin', 'Use 4 to 8 digits.')
+  const settings = await loadSettings(ctx.db)
+  if (!await verifyPin(typeof body.current_pin === 'string' ? body.current_pin : '', settings)) {
+    throw unauthorized('That PIN is not right.', 'current_pin')
+  }
+  const h = await hashPin(body.new_pin)
+  // Sessions are left alone: other people signed in at the counter keep working.
+  await ctx.db.prepare('UPDATE settings SET pin_hash = ?, pin_salt = ?, pin_iterations = ? WHERE id = 1').bind(h.pin_hash, h.pin_salt, h.pin_iterations).run()
+  return json(200, { ok: true })
+}
+
+async function putSettings (ctx) {
+  const body = await readJson(ctx.request)
+  const phone = field => {
+    const v = typeof body[field] === 'string' ? body[field].trim() : ''
+    if (!validPhone(v)) throw badRequest(field, 'Type a phone number like 709-555-0100.')
+    return v
+  }
+  const emergencyPhone = phone('emergency_phone')
+  const officePhone = phone('office_phone')
+  const officeHours = typeof body.office_hours === 'string' ? body.office_hours.trim() : ''
+  if (!officeHours || chars(officeHours) > 120) throw badRequest('office_hours', 'Keep the office hours short.')
+  const given = body.sla_days && typeof body.sla_days === 'object' && !Array.isArray(body.sla_days) ? body.sla_days : {}
+  const slaDays = {}
+  for (const key of CATEGORY_KEYS) {
+    const v = given[key]
+    if (!(v === null || (Number.isInteger(v) && v >= 1 && v <= 365))) {
+      throw badRequest(`sla_days.${key}`, 'Use 1 to 365 days, or leave it blank for no target.')
+    }
+    slaDays[key] = v
+  }
+  await ctx.db.prepare('UPDATE settings SET emergency_phone = ?, office_phone = ?, office_hours = ?, sla_days = ? WHERE id = 1')
+    .bind(emergencyPhone, officePhone, officeHours, JSON.stringify(slaDays)).run()
+  return getSettings(ctx)
+}
+
+async function weeklyReport (ctx) {
+  const asked = ctx.url.searchParams.get('week')
+  if (asked !== null && asked !== '' && !parseIsoDate(asked)) throw badRequest('week', 'Pick a week.')
+  const week = weekOf(asked ? asked : nlDate(ctx.now))
+  const settings = await loadSettings(ctx.db)
+  const { results } = await ctx.db.prepare(`${REQUEST_SELECT} ORDER BY r.created_at, r.id`).all()
+  const counted = results.filter(r => r.status !== 'merged') // merged requests are the same problem counted once
+  const inWeek = at => at !== null && at >= week.start_at && at < week.end_at
+  const closedIn = rows => rows.filter(r => CLOSED_STATUSES.includes(r.status) && inWeek(r.closed_at))
+  const average = rows => (rows.length
+    ? meanDaysHalfUp(rows.reduce((sum, r) => sum + (ms(r.closed_at) - ms(r.created_at)), 0), rows.length)
+    : null)
+  const rows = CATEGORIES.map(c => {
+    const mine = counted.filter(r => r.category === c.key)
+    const closed = closedIn(mine)
+    return { category: c.key, label: c.label, opened: mine.filter(r => inWeek(r.created_at)).length, closed: closed.length, avg_days_to_close: average(closed) }
+  })
+  const allClosed = closedIn(counted)
+  const open = counted.filter(r => isOpen(r.status)).map(r => summary(r, settings, ctx.now))
+  return json(200, {
+    ...week,
+    rows,
+    totals: { opened: rows.reduce((n, r) => n + r.opened, 0), closed: allClosed.length, avg_days_to_close: average(allClosed) },
+    open_now: open.length,
+    overdue_now: open.filter(s => s.overdue).length,
+    oldest_open: open.slice(0, 5)
+  })
 }
 
 async function getSettings (ctx) {
@@ -664,7 +818,8 @@ async function getSettings (ctx) {
 
 // ---- test routes (TEST_MODE=1 only) ----
 
-async function testReset (ctx) {
+/** Every table wiped (rate guards included), SAMPLE settings, PIN and crews written, every photo object removed. */
+async function resetAll (ctx) {
   await ctx.db.batch(resetStatements(ctx.db))
   let cursor
   do {
@@ -672,7 +827,22 @@ async function testReset (ctx) {
     if (page.objects.length) await ctx.env.PHOTOS.delete(page.objects.map(o => o.key))
     cursor = page.truncated ? page.cursor : undefined
   } while (cursor)
+}
+
+async function testReset (ctx) {
+  await resetAll(ctx)
   return json(200, { pin: SAMPLE_PIN, crews: SAMPLE_CREWS.map(c => ({ id: c.id, name: c.name, active: true, open_count: 0 })) })
+}
+
+async function testSeed (ctx) {
+  const body = await readJson(ctx.request)
+  if (body.scenario !== 'demo') throw badRequest('scenario', 'Use the scenario "demo".')
+  await resetAll(ctx)
+  const requests = await seedDemo(ctx)
+  return json(200, {
+    pin: SAMPLE_PIN,
+    requests: requests.map(r => ({ id: r.id, ref: r.ref, status: r.status, status_url: statusUrl(ctx, r.status_key) }))
+  })
 }
 
 // ---- router ----
@@ -697,7 +867,14 @@ const ROUTES = [
   ['POST', `/api/staff/requests/${ID}/merge`, mergeRequest, 'staff id'],
   ['GET', '/api/staff/crews', listCrews, 'staff'],
   ['GET', '/api/staff/settings', getSettings, 'staff'],
-  ['POST', '/api/test/reset', testReset, 'test']
+  ['PUT', '/api/staff/settings', putSettings, 'staff'],
+  ['PUT', '/api/staff/pin', changePin, 'staff'],
+  ['POST', '/api/staff/crews', createCrew, 'staff'],
+  ['PUT', `/api/staff/crews/${ID}`, updateCrew, 'staff id'],
+  ['GET', '/api/staff/report/weekly', weeklyReport, 'staff'],
+  ['GET', '/api/staff/export\\.csv', exportCsv, 'staff'],
+  ['POST', '/api/test/reset', testReset, 'test'],
+  ['POST', '/api/test/seed', testSeed, 'test']
 ].map(([method, path, handler, flags = '']) => ({ method, re: new RegExp(`^${path}$`), handler, flags: flags.split(' ') }))
 
 async function route (request, env) {
@@ -708,7 +885,9 @@ async function route (request, env) {
     if (!m || r.method !== request.method) continue
     if (r.flags.includes('test') && !isTestMode(env)) break
     if (r.flags.includes('staff')) await requireStaff(ctx)
-    const arg = r.flags.includes('id') ? Number(m[1]) : m[1] === undefined ? undefined : decodeURIComponent(m[1])
+    // A malformed escape in a key reaches the handler as null, which answers its own 404 (clarification 11).
+    const decoded = s => { try { return decodeURIComponent(s) } catch { return null } }
+    const arg = r.flags.includes('id') ? Number(m[1]) : m[1] === undefined ? undefined : decoded(m[1])
     return r.handler(ctx, arg)
   }
   throw notFound('Not found.')
