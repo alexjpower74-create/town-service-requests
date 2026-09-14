@@ -823,3 +823,141 @@ test at tests/api.test.mjs:1216:1
     diff: 'simple'
   }
 verdict: RED as expected. "rate guard: 5 wrong PINs per IP per 15 minutes" fail when wrong PINs are never counted.
+
+=== b85b4da +uncommitted worker changes negative:batchguard 2026-09-14T20:57:43.144Z ===
+setup (both phases): src/index.js: "  if (body.version !== row.version) throw await stale()\n"  ->  ""
+phase A (copy with the setup only, must pass): "PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing" DID NOT PASS (exit 1)
+✖ PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing (118.589004ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 183.982177
+
+✖ failing tests:
+
+test at tests/api.test.mjs:727:1
+✖ PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing (118.589004ms)
+  AssertionError [ERR_ASSERTION]: {"id":1001,"ref":"HP-1001","category":"pothole","category_label":"Pothole","location_label":"Ivanys Lane","lat":49.1395,"lng":-55.352,"ward":"centre","ward_name":"Centre Ward (SAMPLE)","status":"done","status_label":"Done","crew_id":1,"crew_name":"Roads crew (SAMPLE)","plus_ones":0,"has_photo":false,"has_contact":false,"merged_count":0,"merged_into_ref":null,"created_at":"2026-09-07T13:15:00.000Z","created_label":"Mon Sep 7, 10:45 AM","age_days":0,"due_at":"2026-09-21T13:15:00.000Z","due_label":"Mon Sep 21","overdue":false,"overdue_days":0,"closed_at":"2026-09-07T13:16:00.000Z","closed_label":"Mon Sep 7, 10:46 AM","days_to_close":0,"version":3,"description":null,"reporter_name":null,"reporter_phone":null,"photo":"none","photo_url":null,"public_message":"Second save (SAMPLE).","status_url":"http://127.0.0.1:8505/s/?k=-k8FVoLk7m0ZHsZzHBs7NKg5","merged_into":null,"merged":[],"history":[{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"created","text":"Reported","internal":false},{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"crew","text":"Crew: Roads crew (SAMPLE)","internal":true},{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"status","text":"Assigned","internal":false},{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"message","text":"Public message: First save (SAMPLE).","internal":false},{"at":"2026-09-07T13:16:00.000Z","at_label":"Mon Sep 7, 10:46 AM","kind":"status","text":"Marked done","internal":false},{"at":"2026-09-07T13:16:00.000Z","at_label":"Mon Sep 7, 10:46 AM","kind":"message","text":"Public message: Second save (SAMPLE).","internal":false}],"copy_update":"SAMPLE Town of Harbour Pond (demo): update on your report HP-1001 (Pothole, Ivanys Lane). The work is done. Message from the town: Second save (SAMPLE). Follow it here: http://127.0.0.1:8505/s/?k=-k8FVoLk7m0ZHsZzHBs7NKg5"}
+  
+  200 !== 409
+  
+      at expectError (file://<repo>/worker/.negative/negative-batchguard/tests/api.test.mjs:41:10)
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-batchguard/tests/api.test.mjs:738:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 409,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+break: src/index.js: "const guardOneChange = db => db.prepare(\"SELECT CASE WHEN changes() = 1 THEN 1 ELSE json('refused') END\")\n"  ->  "const guardOneChange = db => db.prepare('SELECT 1')\n"
+✖ PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing (115.934672ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 178.648764
+
+✖ failing tests:
+
+test at tests/api.test.mjs:727:1
+✖ PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing (115.934672ms)
+  AssertionError [ERR_ASSERTION]: {"id":1001,"ref":"HP-1001","category":"pothole","category_label":"Pothole","location_label":"Ivanys Lane","lat":49.1395,"lng":-55.352,"ward":"centre","ward_name":"Centre Ward (SAMPLE)","status":"done","status_label":"Done","crew_id":1,"crew_name":"Roads crew (SAMPLE)","plus_ones":0,"has_photo":false,"has_contact":false,"merged_count":0,"merged_into_ref":null,"created_at":"2026-09-07T13:15:00.000Z","created_label":"Mon Sep 7, 10:45 AM","age_days":0,"due_at":"2026-09-21T13:15:00.000Z","due_label":"Mon Sep 21","overdue":false,"overdue_days":0,"closed_at":"2026-09-07T13:16:00.000Z","closed_label":"Mon Sep 7, 10:46 AM","days_to_close":0,"version":3,"description":null,"reporter_name":null,"reporter_phone":null,"photo":"none","photo_url":null,"public_message":"Second save (SAMPLE).","status_url":"http://127.0.0.1:8505/s/?k=8ELBMlb4IBFZmzAqg4S9joGh","merged_into":null,"merged":[],"history":[{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"created","text":"Reported","internal":false},{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"crew","text":"Crew: Roads crew (SAMPLE)","internal":true},{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"status","text":"Assigned","internal":false},{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"message","text":"Public message: First save (SAMPLE).","internal":false},{"at":"2026-09-07T13:16:00.000Z","at_label":"Mon Sep 7, 10:46 AM","kind":"status","text":"Marked done","internal":false},{"at":"2026-09-07T13:16:00.000Z","at_label":"Mon Sep 7, 10:46 AM","kind":"message","text":"Public message: Second save (SAMPLE).","internal":false}],"copy_update":"SAMPLE Town of Harbour Pond (demo): update on your report HP-1001 (Pothole, Ivanys Lane). The work is done. Message from the town: Second save (SAMPLE). Follow it here: http://127.0.0.1:8505/s/?k=8ELBMlb4IBFZmzAqg4S9joGh"}
+  
+  200 !== 409
+  
+      at expectError (file://<repo>/worker/.negative/negative-batchguard/tests/api.test.mjs:41:10)
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-batchguard/tests/api.test.mjs:738:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 409,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: NOT RED as required (unbroken did not pass, broken exit 1, every named test red: true).
+
+=== b85b4da +uncommitted worker changes negative:mergegiveup 2026-09-14T20:57:49.603Z ===
+setup (both phases): src/index.js: ".bind(target.id, at, at, source.id, source.version),\n"  ->  ".bind(target.id, at, at, source.id, source.version - 1),\n"
+phase A (copy with the setup only, must pass): "merge: a merge that keeps losing its version guard gives up with 409 and writes nothing" pass
+break: src/index.js: "    throw badState('Someone else changed one of these reports. Reload and try again.') // clarification 13\n"  ->  "    throw e\n"
+✖ merge: a merge that keeps losing its version guard gives up with 409 and writes nothing (162.121444ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 230.001801
+
+✖ failing tests:
+
+test at tests/merge-giveup.test.mjs:36:1
+✖ merge: a merge that keeps losing its version guard gives up with 409 and writes nothing (162.121444ms)
+  AssertionError [ERR_ASSERTION]: {"error":"Something went wrong. Try again.","code":"server_error"}
+  
+  500 !== 409
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-mergegiveup/tests/merge-giveup.test.mjs:46:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 500,
+    expected: 409,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "merge: a merge that keeps losing its version guard gives up with 409 and writes nothing" fail when a merge that keeps losing its guard rethrows (500) instead of answering 409.
+
+=== b85b4da +uncommitted worker changes negative:batchguard 2026-09-14T20:58:36.247Z ===
+setup (both phases): src/index.js: "  if (body.version !== row.version) throw await stale()\n"  ->  ""
+phase A (copy with the setup only, must pass): "PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing" pass
+break: src/index.js: "const guardOneChange = db => db.prepare(\"SELECT CASE WHEN changes() = 1 THEN 1 ELSE json('refused') END\")\n"  ->  "const guardOneChange = db => db.prepare('SELECT 1')\n"
+✖ PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing (114.514513ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 182.362511
+
+✖ failing tests:
+
+test at tests/api.test.mjs:727:1
+✖ PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing (114.514513ms)
+  AssertionError [ERR_ASSERTION]: {"id":1001,"ref":"HP-1001","category":"pothole","category_label":"Pothole","location_label":"Ivanys Lane","lat":49.1395,"lng":-55.352,"ward":"centre","ward_name":"Centre Ward (SAMPLE)","status":"assigned","status_label":"Assigned","crew_id":1,"crew_name":"Roads crew (SAMPLE)","plus_ones":0,"has_photo":false,"has_contact":false,"merged_count":0,"merged_into_ref":null,"created_at":"2026-09-07T13:15:00.000Z","created_label":"Mon Sep 7, 10:45 AM","age_days":0,"due_at":"2026-09-21T13:15:00.000Z","due_label":"Mon Sep 21","overdue":false,"overdue_days":0,"closed_at":null,"closed_label":null,"days_to_close":null,"version":2,"description":null,"reporter_name":null,"reporter_phone":null,"photo":"none","photo_url":null,"public_message":"First save (SAMPLE).","status_url":"http://127.0.0.1:8505/s/?k=CaatJuhmjOh6B-Bj7BdoediF","merged_into":null,"merged":[],"history":[{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"created","text":"Reported","internal":false},{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"crew","text":"Crew: Roads crew (SAMPLE)","internal":true},{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"status","text":"Assigned","internal":false},{"at":"2026-09-07T13:15:00.000Z","at_label":"Mon Sep 7, 10:45 AM","kind":"message","text":"Public message: First save (SAMPLE).","internal":false},{"at":"2026-09-07T13:16:00.000Z","at_label":"Mon Sep 7, 10:46 AM","kind":"status","text":"Marked done","internal":false},{"at":"2026-09-07T13:16:00.000Z","at_label":"Mon Sep 7, 10:46 AM","kind":"message","text":"Public message: Second save (SAMPLE).","internal":false}],"copy_update":"SAMPLE Town of Harbour Pond (demo): update on your report HP-1001 (Pothole, Ivanys Lane). A crew has been assigned. Message from the town: First save (SAMPLE). Follow it here: http://127.0.0.1:8505/s/?k=CaatJuhmjOh6B-Bj7BdoediF"}
+  
+  200 !== 409
+  
+      at expectError (file://<repo>/worker/.negative/negative-batchguard/tests/api.test.mjs:41:10)
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-batchguard/tests/api.test.mjs:738:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 409,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "PUT: two saves with the same version: one wins, the other is 409 stale and writes nothing" fail when the in-batch guard never refuses and the early version check is gone.

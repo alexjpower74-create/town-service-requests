@@ -18,6 +18,8 @@
     "negative:csvleak": "node tests/negative-csvleak.mjs",
     "negative:mergedreport": "node tests/negative-mergedreport.mjs",
     "negative:pinguard": "node tests/negative-pinguard.mjs",
-    "negative": "node tests/negative-boundary.mjs && node tests/negative-radius.mjs && node tests/negative-mergecount.mjs && node tests/negative-leak.mjs && node tests/negative-overdue.mjs && node tests/negative-idempotent.mjs && node tests/negative-week.mjs && node tests/negative-csvguard.mjs && node tests/negative-csvleak.mjs && node tests/negative-mergedreport.mjs && node tests/negative-pinguard.mjs"
+    "negative:batchguard": "node tests/negative-batchguard.mjs",
+    "negative:mergegiveup": "node tests/negative-mergegiveup.mjs",
+    "negative": "node tests/negative-boundary.mjs && node tests/negative-radius.mjs && node tests/negative-mergecount.mjs && node tests/negative-leak.mjs && node tests/negative-overdue.mjs && node tests/negative-idempotent.mjs && node tests/negative-week.mjs && node tests/negative-csvguard.mjs && node tests/negative-csvleak.mjs && node tests/negative-mergedreport.mjs && node tests/negative-pinguard.mjs && node tests/negative-batchguard.mjs && node tests/negative-mergegiveup.mjs"
   }
 }

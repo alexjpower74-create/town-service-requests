@@ -65,12 +65,18 @@ const nameArgs = tests => tests.flatMap(t => ['--test-name-pattern', `^${escapeR
  * test must show ✖; a file that no longer loads is not accepted as red). API tests run against the copy served on 8505.
  * Exits the process 0 only when the unbroken copy passed and every named test went red after the break.
  */
-export async function runControl ({ title, testFile = 'tests/api.test.mjs', tests, breaks, describe, api = true }) {
+// `setup` (optional) patches the copy before BOTH runs: the first run then proves a hidden path works on its own (phase A), and the
+// break must still turn it red (phase B).
+export async function runControl ({ title, testFile = 'tests/api.test.mjs', tests, setup = [], breaks, describe, api = true }) {
   const log = createLog(title)
   let ok = false
   let worker = null
   try {
     const dir = copyWorker(title.replace(/[^a-z0-9]+/gi, '-'))
+    for (const s of setup) {
+      patchFile(dir, s.file, s.find, s.replace, `${title} setup`)
+      log.say(`setup (both phases): ${s.file}: ${JSON.stringify(s.find)}  ->  ${JSON.stringify(s.replace)}`)
+    }
     const args = ['--test', ...nameArgs(tests), testFile]
     let env = {}
     if (api) {
@@ -79,7 +85,7 @@ export async function runControl ({ title, testFile = 'tests/api.test.mjs', test
     }
     const before = runNode(dir, args, env)
     const cleanOk = before.status === 0 && tests.every(t => passed(before.output, t))
-    log.say(`control (unbroken copy): ${tests.map(t => `"${t}"`).join(', ')} ${cleanOk ? 'pass' : `DID NOT PASS (exit ${before.status})\n${before.output}`}`)
+    log.say(`${setup.length ? 'phase A (copy with the setup only, must pass)' : 'control (unbroken copy)'}: ${tests.map(t => `"${t}"`).join(', ')} ${cleanOk ? 'pass' : `DID NOT PASS (exit ${before.status})\n${before.output}`}`)
     if (worker) { await worker.stop(); worker = null }
 
     for (const b of breaks) {
