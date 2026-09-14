@@ -58,5 +58,10 @@ touched, and is gated on printed `*_EXIT=` lines.
   settings with blank-for-no-target SLA boxes, crews, PIN change. **Polish for the final round:** (a) averages print as "2" where the
   others print "2.1": show one decimal always ("2.0"); (b) at 390 the staff top bar wraps onto two lines (Board / Map / Weekly report,
   then Settings / Sign out).
+- **Street labels on the demo seed, checked with the Worker's own code** (main at `709b215`, no server): recomputed all 24 seed pins with
+  `worker/src/geo.js`. None reads "Not near a named street". Five carry a different street than the one the seed placed them on (Abbott
+  Street → Keats Lane, Scout Road → Deans Avenue, Frazer Road → Airbase Road, Junction Road → Water Street, Hollett Place →
+  Commonwealth Drive); in every case the labelled street is measurably nearer the pin (e.g. 2.20 m vs 6.93 m) because the pin sits at
+  a junction, so the label is right. The "Not near a named street" cards in the e2e screenshots come from test arrangements, not the seed.
 - `npm run demo` from main at `fb199ec` on a spare port (8507): migrations, wrangler, seed of 24 SAMPLE requests, links printed;
   `/`, `/s/`, `/staff/`, `/api/town` all 200; a printed status link returns HP-1001 with no private fields. Stopped after.
