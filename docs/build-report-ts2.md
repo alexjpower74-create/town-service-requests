@@ -442,3 +442,67 @@ same-crew and error-order fixes are ts1's, and join by typed reference is approv
 ### Not done / left
 - The board, map and report don't refresh by themselves; they reload after a change in the app and when a filter or view changes.
 - The mock (`?mock=1`) still has no staff routes; no spec uses it.
+
+## M3b — 2026-09-14 (fix round)
+
+`git rebase main` onto `8350c8d` (my M3 merged, DECISIONS 18–19): clean.
+
+### ts1's cross-review of my M2, fixed (DONE)
+1. **Medium, DECISIONS 19: a Save after Add note could silently undo someone else's change.** When a detail is drawn, `renderDetail`
+   now records what the form shows (`state.form`: version, status, crew, message). `save()` compares the inputs with that and sends
+   that version, never the newer version a note's answer brings. If anything changed meanwhile, the Worker's stale check fires.
+   - **Spec** `staff.spec` "a Save after adding a note never undoes a change made meanwhile":
+     1. Open a card.
+     2. Assign crew 1 through the API.
+     3. Add a note in the UI.
+     4. Type a message and Save → **409** and the stale box.
+     5. The API still holds `assigned`, crew 1, and no message.
+   - **Control (g)** `negative-notestale.mjs`: in the copy, `const f = state.form` becomes a snapshot of `state.detail`, which after
+     the note is the note's answer (the old behaviour). The unbroken copy passed. The broken copy went red at `staff.spec:178` "the
+     Save meets the stale check": the Save answered 200 and undid the crew.
+2. **Save, Add note or Join after the session ended no longer throw once the sign-in screen shows.** Each error path first checks
+   its target still exists (`#save-form`, `#err-text`, `#join-confirm-error`, `#join-slot`), and `openDetail` stops if the token is
+   gone.
+   - **Spec:** open a card, end the page's own session through the API (the token is read from localStorage, never set), type, Save
+     → 401, the sign-in screen with "Sign in again.", the panel hidden, and no `pageerror` and no console error other than the
+     browser's own "Failed to load resource" line for the 401.
+3. **Reload after a stale 409 also reloads the board (or map).** `staff.spec`'s stale test now changes crew and message through the
+   API. After Reload and Close, the card is in Assigned and not in New.
+4. **DECISIONS 18:** the detail shows "Due {due_label}" for open reports with an SLA (`#d-due`). **Spec:** it equals the API's
+   `due_label`, and after marking the report Done it is gone.
+5. **A typed reference to a report that was itself joined** now says "HP-x was itself joined with HP-y. Join with HP-y instead."
+   right away, with no confirm and no Join button. **Spec** in `merge.spec`: exactly that text, no `#join-confirm`, no `#join-yes`,
+   and the report is still `new`.
+6. **Crews load fresh each time a report opens** (as well as after every Settings crew change, since M3). **Spec:** sign in,
+   deactivate crew 3 through the API as another session would, open a card → crew 3 is not offered (3 options).
+
+### A bug the new spec found, fixed
+- **"Join with another report" replaced the reference box while the likely duplicates were loading.** `renderJoin` re-drew the
+  whole join area when the candidates answer arrived, so a person who had started typing a reference lost the box (and their focus).
+  The new typed-reference test failed on a detached element in chromium-390, chromium-1280 and webkit-390. The M2 test only passed
+  because it waited for "No open reports…" first.
+- **Fix:** the join area is drawn once; after that only `#join-cands`, `#join-error` and `#join-confirm-slot` change.
+
+### Lead polish: cramped board columns with the panel open at 1280 (DONE)
+- **Before**, `app/tests/shots/before-after/<chromium|webkit>-1280-staff-3-detail-before.png`: five columns squeezed into about
+  728 px. "In progress" wrapped, and cards read "HP- / 1001", "Missed / snow / clearing".
+- **After**, `…-after.png`: at 1101 px and wider, with the panel open, each column keeps at least 210 px and the board scrolls
+  sideways inside itself. The page itself doesn't scroll sideways, and 390 is unchanged. "In progress", "Streetlight out" and
+  "Overdue by 3 days" each fit on one line; Done and Won't fix scroll into view under the panel.
+- **Open point:** nothing on screen says the board scrolls sideways; the right-hand columns are simply cut off at the panel's edge. A
+  fade or a "More columns" hint would help, if you want it.
+
+### Verified
+- **Final full run on the committed code, all four projects on 8503** (4.3 min), pass / fail / skip per project:
+  - chromium-390: **37 / 0 / 0**
+  - chromium-1280: **35 / 0 / 0**
+  - webkit-390: **37 / 0 / 0**
+  - webkit-1280: **35 / 0 / 0**
+
+  **144 of 144.** The first full run found the join-panel bug above (141 passed, 3 failed). Every screenshot was re-shot in that final
+  run.
+- **All seven app negative controls on 8506**, on the final code. Each unbroken copy passed and each broken copy went red. The log
+  entries are at `app/tests/negative-control.log` lines 841–1160: boundary, statusleak, overlay, metoo, attribution, overdue,
+  notestale. There are no machine paths in the log. `npm run negative` now runs all seven.
+- **I looked at:** the 1280 detail before and after (chromium, and the WebKit after), the 390 detail with "Due Wed Sep 23", and the
+  1280 join confirm.

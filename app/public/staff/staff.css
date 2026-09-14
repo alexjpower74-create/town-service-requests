@@ -24,6 +24,10 @@
 /* ---- board ---- */
 .staff-main { max-width: 1600px; margin: 0 auto; padding: 16px; }
 .staff-main.with-detail { padding-right: 536px; }
+/* With the panel open at desktop width, the columns keep a readable width and the board scrolls sideways inside itself. */
+@media (min-width: 1101px) {
+  .staff-main.with-detail .board { grid-template-columns: repeat(5, minmax(210px, 1fr)); overflow-x: auto; padding-bottom: 8px; }
+}
 .filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; margin: 0 0 14px; }
 .filters .field-label { margin: 0 0 4px; font-size: 15px; }
 .filters select.field { min-width: 190px; }
