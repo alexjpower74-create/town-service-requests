@@ -180,3 +180,118 @@ type; `updated_at !== reported_at` compares two ISO strings from the same source
    1 says a plain space); no upload-token expiry; no `/api/town/locate` yet.
 
 Nothing in ts2 M1 needs a Worker change.
+
+## M2b (2026-09-14)
+
+Rebased on main at `643942e` (API.md clarifications 10–14). Work in `c556585`; this report and the control log follow it.
+
+### What I built: DONE
+- `PUT /api/staff/pin`: `new_pin` 4–8 digits as a string (field `new_pin`), then `current_pin` checked (401 field `current_pin`),
+  then a fresh PBKDF2 hash + salt. Sessions are untouched, so every other signed-in session keeps working.
+- Crews: `POST /api/staff/crews` → 201 crew; `PUT /api/staff/crews/:id` `{ name, active }` → 200 crew. Name 1–40 after trimming;
+  `active` must be a boolean. A deactivated crew stays on its requests; the existing PUT rule refuses it for any other request.
+- `PUT /api/staff/settings`: every field required and checked in order (`emergency_phone`, `office_phone`, `office_hours`,
+  `sla_days.<key>` in category order). Phones and hours stored trimmed. `due_at` and `overdue` read the new SLA at once.
+- `GET /api/staff/report/weekly?week=`: `time.js` works out NL midnight with a two-pass offset lookup (`nlMidnightUtc`); `weekOf`
+  gives `week_start`, `week_label`, `start_at`, `end_at`. Merged requests are filtered out before every count. Averages are integer
+  half-up (`meanDaysHalfUp`); totals are taken over all closed requests. `open_now`, `overdue_now` and `oldest_open` (5, oldest
+  first) are as of now.
+- `GET /api/staff/export.csv`: same filters and order as the board list, sharing `filteredRequests`. `csv.js` has the exact
+  header, CRLF on every line (the last included), RFC 4180 quoting, a formula guard applied before quoting, NL `YYYY-MM-DD HH:MM`
+  dates, and the NL-date filename. Rows are StaffRequestSummary plus `public_message` only.
+- Rate guards (table `attempts`, window `(now − window, now]`, IP from `clock.js`, `X-Test-IP` only with TEST_MODE, cleared by reset):
+  - **create:** 10 new reports per hour; a resend of an existing `submission_id` is answered before the guard, never refused.
+  - **me-too:** 30 counted taps per hour; a phone already counted on that report is answered as a duplicate, never refused, and
+    only a tap that added +1 is counted (chained on `changes() = 1` in the same batch).
+  - **wrong PIN:** 5 per 15 min; the right PIN isn't counted; once tripped, even the right PIN waits.
+  - **unknown status key:** 30 per 10 min; once tripped, even good links wait.
+  Attempts older than a day are pruned on each new report.
+- `POST /api/test/seed { scenario: "demo" }` (`seed.js`): reset, then 24 SAMPLE requests (ids 1001–1024) relative to now.
+  - **Where:** pins sit a few metres off a vertex of a real street line, chosen deterministically and inside the boundary.
+  - **What:** all 7 categories and all 6 statuses, 3 overdue, one merged pair (HP-1003 into HP-1002, with the +1s carried),
+    crews, public messages, 3 internal notes, "Me too" counts, and SAMPLE first names and 709-555-01xx phones on some.
+    Descriptions end "(SAMPLE)".
+  - **History:** consistent with the status path, with every entry between creation and now.
+  - **Photos:** 6 SVG drawings in R2, labelled "SAMPLE photo · A drawing, not a real photo", with no script, links or images.
+  - **Returns:** `{ pin, requests: [{ id, ref, status, status_url }] }`, the shape `demo.mjs` reads.
+- Clarifications from main:
+  - **10:** a crew moves a `new` request to `assigned` only when it changes.
+  - **11:** a malformed `%` escape in a status or photo key reaches the handler as "no key" and answers its 404. On the status
+    route it also counts as an unknown key.
+  - **13:** a merge that still loses after its retries answers 409 `bad_state` "Someone else changed one of these reports.
+    Reload and try again."
+- Photo answers now also send `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox`, since demo photos
+  are SVG served from our own origin.
+
+### What I verified: DONE
+`npm test` at `c556585`: **unit 21 pass, API 49 pass, 0 fail**.
+
+New unit tests:
+- NL midnight on both 2026 DST days, the week spanning the November change, and a week crossing the year end.
+- Date parsing refuses Feb 29 2026, month 13, `2026-9-7` and year 0001.
+- Every formula-guard trigger, quoting, and CSV dates across DST.
+- `X-Test-IP` and `X-Test-Now` are ignored without TEST_MODE.
+- The SVG has no script or links and escapes the text it prints.
+
+New API tests:
+- **PIN change:** old PIN refused after, new one works, the other session keeps working, reset restores 3690.
+- **Crews:** validation, deactivation, and the refused pick.
+- **Settings:** 12 validation cases, then an SLA change that clears overdue, then no target, then overdue again.
+- **Weekly report on a fake clock, exact numbers:**
+  - pothole row: opened 2, closed 3, average 4.9;
+  - streetlight row: 0.25 days → 0.3;
+  - totals: opened 6, closed 4, average 3.8 (a mean of the row means would be 2.6);
+  - a merged duplicate left out; `open_now` 6, `overdue_now` 3, and the `oldest_open` order.
+- **NL week boundaries:**
+  - the Sunday 11:30 PM NDT report counts in the earlier week; the next week starts at midnight Monday NL time;
+  - the default week follows NL time, not UTC;
+  - November week: 7 days + 1 hour (`2026-10-26T02:30Z` to `2026-11-02T03:30Z`); March week: 7 days − 1 hour.
+- **CSV:**
+  - three exact lines covering a quoted message with comma and quotes, `'=SUM(A1)`, `'@crew`, a closed row with its days, and
+    the ward and crew names;
+  - a filename with the NL date when UTC is already the next day; filters, 400 and 401;
+  - privacy: no name, phone, description, note or device id.
+- **Each rate guard** trips at its count, lets another IP through, reopens at the window's edge (checked 1 ms either side), and
+  never refuses a duplicate.
+- **Seed:** the exact return shape; every status, category and board column; overdue ones; the merged pair on the staff and public
+  sides; pins inside the boundary and on real streets; SAMPLE names and phones; history in order; every photo loads as
+  `image/svg+xml` with the CSP; seeding twice doesn't double up.
+
+Also caught before the first run: two of my rate-guard edge checks were off by one window. Each asserted a 429 at exactly
+`T0 + window`, but by then the attempt made at T0 has already left the window. They now check 1 ms before.
+
+### Negative controls: DONE (all eleven RED at `c556585`)
+The six M1 controls were re-run on this commit and are still red. The five new ones:
+
+| control | break in the copy | test that went red |
+|---|---|---|
+| `negative:week` | `src/time.js`: `const bound = date => nlMidnightUtc(…)` → `date.getTime()` (UTC midnight) | ✖ weekly report: NL week boundaries, the Sunday 11:30 PM request and the DST weeks |
+| `negative:csvguard` | `src/csv.js`: the formula-guard line removed | ✖ CSV export: header, CRLF, quoting, formula guard and NL-date filename |
+| `negative:csvleak` | `src/csv.js`: a `Phone` header and `r.reporter_phone` cell; `src/index.js`: the row carries `reporter_phone` | ✖ CSV export never contains the reporter's name, phone, description or note text |
+| `negative:mergedreport` | `src/index.js`: `const counted = results.filter(r => r.status !== 'merged')` → `const counted = results` | ✖ weekly report on a fake clock |
+| `negative:pinguard` | `src/index.js`: `await attemptStmt(ctx, 'pin').run()` removed | ✖ rate guard: 5 wrong PINs per IP per 15 minutes |
+
+### Calls I made where the contract is silent (lead: please confirm or correct)
+1. **Messages API.md doesn't give:**
+   - unknown-status-key 429: "Too many report links that don't work. Wait 10 minutes and try again.";
+   - bad `week`: 400 field `week` "Pick a week.";
+   - crew `active` not a boolean: 400 field `active` "Say whether the crew is working.";
+   - seed with another scenario: 400 field `scenario` "Use the scenario "demo".";
+   - unknown crew: 404 "We can't find that crew.".
+2. **Crew PUT** needs both `name` and `active`, and checks fields before the id (400 before 404, like notes in clarification 12).
+3. **A wrong `current_pin` on PIN change** is not counted toward the sign-in guard: that route needs a signed-in session already.
+4. **Rate guards:**
+   - they run after validation and after the duplicate lookup, so a malformed report never uses up the allowance and a resend is
+     never refused;
+   - `week=` empty means the current week, like the list filters (clarification 4).
+5. **CSV columns:**
+   - `Status` is the status label ("Won't fix") and `Due` is a date-time like the other dates;
+   - `Days to close` is the number (`3.2`), empty while open; `Plus ones` is the number.
+6. **The seed** is deterministic in its pins and texts; its keys, tokens and device ids are random. Its first request is HP-1001.
+
+### Gaps and notes
+- `PUT /api/staff/pin` answers a wrong `current_pin` with 401 `unauthorized` (as API.md says). **For ts2:** the staff client must
+  not treat that 401 as "signed out"; `field: "current_pin"` tells them apart from "Sign in again." (which has no field).
+- Clarification 13's give-up path (409 after the retries) is code only: no test can force three lost races through the API. It
+  sits behind the same in-batch guard noted as unproven in M1.
+- No screenshot: M2b has no screen. The seed test is the proof that the demo data exists and its photos load.
