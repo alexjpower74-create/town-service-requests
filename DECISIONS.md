@@ -46,3 +46,13 @@ PLAN.md, API.md and reports can point at them.
 13. **SAMPLE phone numbers use 709-555-01xx**, the range reserved for fiction, so nobody real gets called from the demo.
 14. **Two slices, Opus 5 medium** (tonight's rule): ts1 owns `worker/**`, ts2 owns `app/**`; the lead owns data, tools and docs.
     `app/node_modules` and the vendored map libraries are installed on main before `rig up`.
+
+## 2026-09-14, lead (after M1)
+
+15. **The street hint under the map comes from the Worker** (`GET /api/town/locate`, API.md clarification 9), so "Near …" on the phone
+    is the same label the status link will show. The phone keeps its own boundary check as the instant gate for Next; the Worker's
+    refusal on send stays the authority. Sending ~930 street points to every phone was the alternative; one small call per pin is
+    lighter on bad signal and can't drift from the Worker's rule.
+16. **Airport name labels are hidden too** (ts2's call, kept): OpenMapTiles airport names carry the real town's name. Street and water
+    names stay visible.
+17. **Date labels have no comma after the weekday** ("Mon Sep 7"), matching the contract's examples (ts1's call, clarification 1).

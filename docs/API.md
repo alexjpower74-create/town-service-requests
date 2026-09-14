@@ -310,4 +310,29 @@ tab or CR gets a leading `'`. **No reporter name, phone, description or notes.**
   photos, SAMPLE names and 709-555-01xx phones on some) → `{ "pin": "3690", "requests": [ { "id", "ref", "status", "status_url" } ] }`.
 
 ## Clarifications
-(none yet)
+
+1. **Labels have no comma after the weekday**: `"Mon Sep 7"` and `"Mon Sep 7, 10:45 AM"` with plain spaces, assembled from
+   `formatToParts` (the bare `Intl.format` call prints `"Mon, Sep 7"` and a narrow no-break space before AM on newer ICU). Apps show
+   labels as given; a test that recomputes a label must assemble it the same way. (ts1 M1)
+2. **Staff PUT check order:** 404 → `version` not an integer (400 field `version` "Reload this report and try again.") → merged
+   (409 `bad_state`, even with an old version) → stale (409) → field checks in the listed order → changes. (ts1 M1)
+3. **Messages the contract didn't give:** list filters — `status` "Pick a status.", `category` "Pick one of the categories.", `ward`
+   "Pick one of the wards.", `min_age_days` "Use a whole number of days.", `overdue` "Use overdue=1 for overdue reports only."; merge
+   with `into_id` missing or not an integer → 400 field `into_id` "Pick a different report to join it with."; unreadable JSON → 400
+   `bad_request` "That request could not be read." (no field); anything unexpected → 500 `server_error` "Something went wrong. Try
+   again."; unknown `/api` route → 404 `not_found`. (ts1 M1)
+4. **List query:** an empty parameter (`?status=&category=`) counts as absent; `overdue=0` is accepted as no filter; `status=merged`
+   lists the merged ones. (ts1 M1)
+5. **Photo PUT order:** 404 unknown id → 401 token → 413 size → 415 type. The type is the part before `;`, lower-cased; the bytes are
+   not sniffed. (ts1 M1)
+6. **Crews on PUT:** sending the crew a request already has is "no change", even if that crew was deactivated since. (ts1 M1)
+7. **Notes** are allowed on merged and closed requests. (ts1 M1)
+8. **`reported_label` in `nearby` is the date label** (`"Mon Sep 7"`); every other `reported_label` / `created_label` / `closed_label`
+   is a full label. (ts1 M1)
+9. **New route `GET /api/town/locate?lat=&lng=`** (asked by ts2 M1: the phone only has one point per street, so its own "Near …"
+   guess could differ from the label the status link will show). → 200 `{ "inside": true, "location_label": "Airbase Road",
+   "ward": "north" }`, using exactly the Worker's boundary, nearest-street and ward rules. Outside the boundary it still answers 200
+   with `inside: false` (and the label/ward it would have had). Non-numeric `lat`/`lng` → 400 field `location` "Put a pin on the map
+   where the problem is." No rate guard, `Cache-Control: no-store`. The app calls it after each pin placement (debounced ~300 ms,
+   latest answer wins) and shows "Near {location_label}" from it; the phone's own ray-casting check stays the instant gate for
+   **Next**, and the Worker's refusal on POST stays the authority. If the call fails (no signal) the hint is simply not shown.
