@@ -4,7 +4,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dueAt, isOverdue, overdueDays, ageDays, daysToClose, meanDaysHalfUp, DAY_MS } from '../src/sla.js'
-import { dateLabel, fullLabel } from '../src/time.js'
+import { dateLabel, fullLabel, nlMidnightUtc, weekOf, nlDate, csvDateTime, parseIsoDate } from '../src/time.js'
+import { csvCell } from '../src/csv.js'
+import { clientIp, now as clockNow } from '../src/clock.js'
+import { photoSvg } from '../src/seed.js'
 import { copyUpdate } from '../src/copy.js'
 import * as H from '../src/history.js'
 import { verifyPin } from '../src/auth.js'
@@ -92,6 +95,62 @@ test('copy_update for merged names the kept report', () => {
     townName: 'SAMPLE Town', ref: 'HP-1002', categoryLabel: 'Pothole', locationLabel: 'Main Street', status: 'merged', targetRef: 'HP-1001',
     publicMessage: null, statusUrl: 'http://x/s/?k=abc'
   }), 'SAMPLE Town: update on your report HP-1002 (Pothole, Main Street). It was joined with report HP-1001. Follow it here: http://x/s/?k=abc')
+})
+
+test('NL midnight and report weeks, across both DST changes', () => {
+  const utc = ms => new Date(ms).toISOString()
+  assert.equal(utc(nlMidnightUtc(2026, 9, 7)), '2026-09-07T02:30:00.000Z') // NDT
+  assert.equal(utc(nlMidnightUtc(2026, 11, 2)), '2026-11-02T03:30:00.000Z') // NST
+  assert.equal(utc(nlMidnightUtc(2026, 11, 1)), '2026-11-01T02:30:00.000Z') // midnight before the 2 AM fall-back is still NDT
+  assert.equal(utc(nlMidnightUtc(2026, 3, 8)), '2026-03-08T03:30:00.000Z') // midnight before the 2 AM spring-forward is still NST
+  assert.equal(utc(nlMidnightUtc(2026, 3, 9)), '2026-03-09T02:30:00.000Z')
+  assert.deepEqual(weekOf('2026-11-01'), {
+    week_start: '2026-10-26', week_label: 'Mon Oct 26 to Sun Nov 1', start_at: '2026-10-26T02:30:00.000Z', end_at: '2026-11-02T03:30:00.000Z'
+  })
+  assert.equal(weekOf('2026-09-07').week_start, '2026-09-07')
+  assert.equal(weekOf('2027-01-03').week_label, 'Mon Dec 28 to Sun Jan 3')
+  assert.equal(nlDate('2026-09-14T02:00:00.000Z'), '2026-09-13')
+  assert.equal(nlDate('2026-09-14T02:30:00.000Z'), '2026-09-14')
+  for (const bad of ['2026-02-29', '2026-13-01', '2026-9-7', '0001-01-01', '', null, undefined]) assert.equal(parseIsoDate(bad), null, String(bad))
+  assert.ok(parseIsoDate('2028-02-29'))
+})
+
+test('CSV cells: formula guard, RFC 4180 quoting, NL dates in 24-hour time', () => {
+  assert.equal(csvCell('=SUM(A1)'), "'=SUM(A1)")
+  assert.equal(csvCell('+1 more'), "'+1 more")
+  assert.equal(csvCell('-5 degrees'), "'-5 degrees")
+  assert.equal(csvCell('@crew'), "'@crew")
+  assert.equal(csvCell('\tx'), "'\tx")
+  assert.equal(csvCell('\rx'), `"'\rx"`)
+  assert.equal(csvCell('a,b'), '"a,b"')
+  assert.equal(csvCell('say "hi"'), '"say ""hi"""')
+  assert.equal(csvCell('two\nlines'), '"two\nlines"')
+  assert.equal(csvCell(null), '')
+  assert.equal(csvCell(0), '0')
+  assert.equal(csvCell(3.3), '3.3')
+  assert.equal(csvDateTime('2026-09-07T02:30:00.000Z'), '2026-09-07 00:00')
+  assert.equal(csvDateTime('2026-09-08T02:00:00.000Z'), '2026-09-07 23:30')
+  assert.equal(csvDateTime('2026-11-01T04:29:00.000Z'), '2026-11-01 01:59')
+  assert.equal(csvDateTime('2026-11-01T05:31:00.000Z'), '2026-11-01 02:01')
+  assert.equal(csvDateTime(null), '')
+})
+
+test('X-Test-IP and X-Test-Now count only with TEST_MODE=1', () => {
+  const req = new Request('http://x/', { headers: { 'X-Test-IP': 'fake', 'X-Test-Now': '2020-01-01T00:00:00.000Z', 'CF-Connecting-IP': '203.0.113.9' } })
+  assert.equal(clientIp(req, {}), '203.0.113.9')
+  assert.equal(clientIp(req, { TEST_MODE: '0' }), '203.0.113.9')
+  assert.equal(clientIp(req, { TEST_MODE: '1' }), 'fake')
+  assert.ok(clockNow(req, {}) > Date.parse('2026-01-01T00:00:00.000Z'))
+  assert.equal(clockNow(req, { TEST_MODE: '1' }), Date.parse('2020-01-01T00:00:00.000Z'))
+  assert.equal(clientIp(new Request('http://x/'), {}), 'local')
+})
+
+test('demo photos are plain SVG drawings labelled SAMPLE photo, with no script or links', () => {
+  const svg = photoSvg('pothole', 'HP-1001 <&>')
+  assert.ok(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"'))
+  assert.ok(svg.includes('SAMPLE photo') && svg.includes('A drawing, not a real photo'))
+  assert.ok(svg.includes('HP-1001 &lt;&amp;&gt;'))
+  assert.ok(!/<script|href|xlink|<image|url\(/i.test(svg))
 })
 
 test('SAMPLE rows: the migration and the reset agree, and the stored PIN is 3690', async () => {
