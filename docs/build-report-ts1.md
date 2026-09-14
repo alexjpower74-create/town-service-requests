@@ -428,3 +428,111 @@ nothing in `app/**` edited. Severity is mine.
     1 (`status.spec.mjs:36`). Status-page re-checks use good keys, which aren't counted.
   - **Watch for later:** a test that makes 11 or more reports at real time, or 6 wrong PINs, will now get 429. Spread them with
     `at:` or give `makeRequest` an `X-Test-IP`.
+
+## Cross-review of ts2 M3
+Read-only, from commit `2de1d90` (`git show` only, never `.worktrees/ts2`), against docs/API.md with clarifications 1–20. Files:
+`app/public/staff/staff.js` (842 lines), `app/public/api.js`, `app/public/staff/index.html`, `app/playwright.config.mjs`, the five new
+specs (`emergency`, `map`, `overdue`, `report-week`, `settings`), and the `helpers.mjs`, `staff.spec.mjs`, `targets.spec.mjs` and
+`shots.spec.mjs` changes. No server started, nothing in `app/**` edited. Severity is mine.
+
+### Findings
+1. **Medium (test flake, weekly): the town-office screenshot test picks "last week" by the UTC date.** `shots.spec.mjs:107` asks
+   for `?week=` + `new Date(Date.now() − 7 days).toISOString().slice(0, 10)`, which is a UTC date. UTC is 2.5 h (NDT) or 3.5 h (NST)
+   ahead of NL, so from 21:30 NDT (22:30 NST) to midnight on a Sunday, that date is already the Monday that starts the *current*
+   NL week.
+   - **What goes wrong:** `lastWeek` is then this week. The four reports at `shots.spec.mjs:109-112` are dated up to 140 h after
+     its start, which is in the future. `shots.spec.mjs:148` expects Previous week to show `lastWeek.week_start`, but the UI's
+     previous week is the real last week, so the test fails, in all four projects.
+   - **Fix:** do what `report-week.spec.mjs:13-14` already does. Read the current week from the API with no `week`, then
+     `shiftDate(current.week_start, -7)`.
+2. **Low (test flake, narrow windows): `report-week.spec.mjs` compares the UI against API answers read earlier on the real clock.**
+   - **Week change:** `current` is read at `:13`; the UI's label and week are checked at `:40`, `:57` and `:58`, several seconds of
+     arranging later. If NL Monday 00:00 falls between, the labels differ.
+   - **CSV filename:** the browser download happens at `:61`; the API CSV that gives the expected filename is fetched afterwards
+     (`:64`). The filename carries the NL date, so any NL midnight in that gap fails `:67`.
+   - **Overdue count:** `prev.overdue_now` is read at `:34` and compared at `:53`. The garbage report at `:32` (Sunday 06:00, 3-day
+     target) falls due on Wednesday 06:00 NL of the current week, so a run spanning that minute changes the count.
+   - **Suggested fixes:** fetch the API CSV just before *and* after the download and accept either filename; re-read the week and
+     the counts after the UI has loaded. None of these can be pinned with `X-Test-Now`, because the browser can't send it.
+3. **Low:** the new catch blocks repeat M2 finding 2: after a session-ending 401 they write to elements that no longer exist.
+   `api.js:69-72` and `api.js:89-92` fire `SIGNED_OUT` before throwing; `showSignin` → `leaveView` replaces `#app`. Then these are
+   null and throw a TypeError:
+   - `$('csv-error')` (`staff.js:377`);
+   - `(target || $('settings-error'))` (`staff.js:486-487`);
+   - `err` in `crewChange` (`staff.js:505`);
+   - `target` in `changePin` (`staff.js:521-522`).
+   People see the right screen; only the console shows an error.
+4. **Low:** the typed name is lost if you Deactivate before Rename. The toggle sends `name: crew.name` from `state.crews`
+   (`staff.js:544`), not the text in `#crew-name-<id>`, then redraws the list (`staff.js:500`). A name typed without pressing
+   Rename is silently thrown away. Both `name` and `active` are always sent, as the contract needs.
+5. **Low:** the Weekly report's "this week" is fixed when the view opens (`staff.js:322`). If the page stays open past NL Monday
+   00:00, **Next week** stays disabled at the old week (`staff.js:333`) until the view is opened again. Opening a report from
+   "Oldest open" and saving it calls `refreshView()` (`staff.js:688`), which reloads only a board or the map, so the report's "Open
+   now", "Overdue now" and "Oldest open" stay as they were until the week is reloaded.
+6. **Low, observation:** **Download CSV** sends no filters (`staff.js:367` → `api.js:134` with `{}`), so it always exports every
+   report except merged ones. That fits the page text (`staff.js:302`) and the spec (`report-week.spec.mjs:64-68`). The contract
+   also allows the list filters, and the board's current filters could be passed if you want "what I'm looking at".
+7. **Note:** M2 findings 1–5 are not yet in `2de1d90`, as expected with ts2's fix round separate:
+   - the note swapping in a newer version under an unrefreshed form, `staff.js:709-713`;
+   - the stale Reload not refreshing the board, `staff.js:822`;
+   - `due_label` still unused.
+   M2 finding 6 is partly fixed: crews now reload on every visit to the board (`staff.js:184`), the map (`:254`) and Settings
+   (`:393`), and after every crew change (`:498`).
+
+### Checks that are clean (none)
+- **Staff Map** (`staff.js:232-287`):
+  - uses `GET /api/staff/requests` with the board's own filters (`filterQuery`, `staff.js:155-158`: `category`, `ward`,
+    `min_age_days`, `overdue=1`; empty ones dropped by `api.js:102-107`) and no `status`, so merged reports stay off the map;
+  - places each pin at the summary's `lat`/`lng` (`staff.js:267`), coloured by `status` with the red ring from the API's `overdue`
+    (`staff.js:262`, `266`), never worked out on the phone;
+  - clusters with markercluster and opens the detail on a pin (`staff.js:252`, `268`);
+  - filters are shared with the board (`state.filters`, `staff.js:148-153`), and after a save or join the map reloads
+    (`staff.js:160-163`).
+- **Weekly report** (`staff.js:290-359`):
+  - `week` is omitted for the current week (`staff.js:320`; `api.js:133` drops `''`), then the API's own `week_start` ± 7 days
+    (`staff.js:306-307`), always a valid Monday;
+  - it reads `week_label`, `week_start`, `rows[].{category,label,opened,closed,avg_days_to_close}` (`null` shown as "–"), `totals`,
+    `open_now`, `overdue_now`, and `oldest_open[].{id,ref,category_label,location_label,age_days,overdue,overdue_days}`, all
+    present in the contract.
+- **CSV download** (`api.js:77-97`, `staff.js:362-381`): a real `fetch` with `Authorization: Bearer`. A 401 without `field` clears
+  the session and signs out; any other error (the route has no rate guard, so no 429 is expected) shows the API's `error` in
+  `#csv-error`. The filename is taken from `Content-Disposition` (the NL-date name). The file goes out through a blob link, and
+  the spec proves it byte-equal to `GET export.csv`.
+- **Settings PUT** (`staff.js:471-491`):
+  - all four fields are always sent;
+  - `sla_days` has every category key: blank → `null`, whole digits → a number, anything else as typed so the Worker names it;
+  - `field` goes to the right place: `emergency_phone` / `office_phone` / `office_hours` → `#err-<field>`, and `sla_days.<key>` →
+    `#err-sla-<key>` (`slice(9)` strips `sla_days.`). The spec checks `sla_days.pothole` (`settings.spec.mjs:14-16`).
+- **Crews:**
+  - POST sends `{ name }` (`api.js:131`); PUT sends both `name` and `active` for rename and toggle (`staff.js:539`, `544`);
+  - errors show on that crew's row;
+  - after any change, `loadCrews()` refreshes the list, and the detail's crew select uses the refreshed list (active crews plus the
+    report's current one, `staff.js:579`), proven by `settings.spec.mjs:40-79`.
+- **PIN change** (`staff.js:509-526`): sends `{ current_pin, new_pin }` through `staff()`. The Worker checks `new_pin` first
+  (clarification 17 and M2b), and the UI puts either field's message next to its input. A `current_pin` 401 has a `field`, so it
+  never signs out (`api.js:69`), proven by `settings.spec.mjs:26-37`.
+- **Sign out** (`staff.js:121-126`): calls `POST /api/staff/signout` (errors ignored), clears the token, clears the hash so the
+  next sign-in lands on the board, and shows sign-in.
+- **Sign-in 429** (`staff.js:108-117`): sign-in goes through `call()`, not `staff()`, so a 401 or 429 never triggers sign-out. The
+  API's text shows as is, and the box is emptied (`staff.spec.mjs:22-43`, new).
+- **PLAN.md M3 is complete:**
+  - **Map:** clusters, status colours, overdue ring, shared filters, pin → detail;
+  - **Weekly report:** week picker, table, totals, oldest open, Download CSV fetched with the token as a blob;
+  - **Settings:** phones, office hours, SLA per category, crews add/rename/deactivate, change PIN; sign out;
+  - **Specs:** `overdue`, `report-week`, `map`, `settings`, `emergency`;
+  - **Control (f):** `negative-overdue.mjs`;
+  - **Final screenshots:** all four projects, 21 each, including map, weekly report and settings (`playwright.config.mjs` no
+    longer drops `@shots` for WebKit).
+  - **One wording difference, correct as built:** PLAN.md's overdue spec says "Overdue by 1 day" for a streetlight "created 11 days
+    ago". `overdue.spec.mjs:3-4,13,17` arranges 11 days and 1 hour and expects the API's `overdue_days` of 2, because
+    `ceil((now − due) / day)` is already 2 for anything past exactly 11 days. The card shows what the API says.
+- **Rate guards against the new specs: nothing trips unintentionally.**
+  - `helpers.mjs` `makeRequest` now sends its own random `X-Test-IP` per arranged report, so `map.spec.mjs:11-14`'s 20 reports
+    in one test (which would otherwise have hit the 10-an-hour guard) never count against the browser's IP.
+  - The one deliberate trip is `staff.spec.mjs:22-43` (5 wrong PINs, then 429), and the auto reset clears it before the next test.
+  - A wrong `current_pin` isn't counted (clarification 17), so `settings.spec.mjs:26-37` doesn't add to the sign-in guard.
+  - The other specs send at most 5 reports, 4 "Me too" taps (unchanged in `shots.spec.mjs`) and 1 wrong sign-in PIN per test.
+- **Real-clock use that is safe:** `overdue.spec.mjs` and `map.spec.mjs:44` date reports relative to now, and their assertions
+  depend only on elapsed days (`age_days` 11, `overdue_days` 2, 12 days late), not on where NL midnight or a week boundary falls.
+  `report-week.spec.mjs:13-33` places its reports relative to the API's own `start_at` of the previous NL week, so the counts and
+  averages at `:35-51` are fixed. Its only clock risks are the narrow windows in finding 2.
