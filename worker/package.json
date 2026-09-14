@@ -1,0 +1,18 @@
+{
+  "name": "town-service-requests-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "town": "node tools/build-town-data.mjs",
+    "migrate": "wrangler d1 migrations apply town-service-requests --local --persist-to .state-8502",
+    "dev": "npm run migrate && wrangler dev --local --port 8502 --inspector-port 8512 --persist-to .state-8502",
+    "test": "node tests/run.mjs",
+    "negative:boundary": "node tests/negative-boundary.mjs",
+    "negative:radius": "node tests/negative-radius.mjs",
+    "negative:mergecount": "node tests/negative-mergecount.mjs",
+    "negative:leak": "node tests/negative-leak.mjs",
+    "negative:overdue": "node tests/negative-overdue.mjs",
+    "negative:idempotent": "node tests/negative-idempotent.mjs",
+    "negative": "node tests/negative-boundary.mjs && node tests/negative-radius.mjs && node tests/negative-mergecount.mjs && node tests/negative-leak.mjs && node tests/negative-overdue.mjs && node tests/negative-idempotent.mjs"
+  }
+}
