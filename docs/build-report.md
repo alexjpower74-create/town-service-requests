@@ -15,6 +15,8 @@ from a QA worktree pinned to the named sha on port 8509 (`rig qa --ref`), never 
 | ts2 M1 | `1757f0c` | (slice's own run, mock only) map-label unit, M1 smoke | 4/0, 522/0; merged on review, real-Worker grading was M2 |
 | main after ts2 M2 | `fb199ec` | Playwright, 4 projects (chromium + webkit, 390 + 1280), real Worker with ts1's M2b/M2c guards | 84 passed / 0 failed / 0 skipped (2.2 min), `PW_EXIT=0` |
 | main after ts2 M3 | `8350c8d` | Playwright, 4 projects, real Worker (adds map, weekly report, settings, overdue, emergency, sign-in rate guard) | 124 passed / 0 failed / 0 skipped (3.6 min), `PW_EXIT=0` |
+| **final** main after ts2 M3c | `691a331` | Worker unit + API, 13 Worker controls, Playwright 4 projects, 7 app controls, map-label unit | unit 21/0/0, API 50/0/0, 13/13 red; Playwright 163 passed / 1 failed (defect 10, a test race); 7/7 red; 4/0 |
+| **final** main after ts2 M3d | `3d5a997` | Playwright 4 projects, `negative-attribution`, map-label unit (test-only change; `worker/` and `app/public/` identical to `691a331`) | **164 passed / 0 failed / 0 skipped** (4.4 min), attribution red, 4/0 |
 
 **A QA run that didn't run.** The first QA attempt for ts1 M2b exited 1 without testing anything: the previous run's negative
 controls had rewritten `worker/tests/negative-control.log` inside the QA worktree, so `rig qa` could not check out the new sha, and
@@ -73,6 +75,21 @@ touched, and is gated on printed `*_EXIT=` lines.
   a junction, so the label is right. The "Not near a named street" cards in the e2e screenshots come from test arrangements, not the seed.
 - `npm run demo` from main at `fb199ec` on a spare port (8507): migrations, wrangler, seed of 24 SAMPLE requests, links printed;
   `/`, `/s/`, `/staff/`, `/api/town` all 200; a printed status link returns HP-1001 with no private fields. Stopped after.
+
+## Final numbers (what shipped, main `3d5a997`)
+
+| Suite | Result |
+|---|---|
+| Worker unit (`node --test`) | 21 passed, 0 failed, 0 skipped |
+| Worker API against `wrangler dev --local` | 50 passed, 0 failed, 0 skipped |
+| Worker negative controls | 13 of 13 red after an unbroken pass (boundary, radius, mergecount, leak, overdue, idempotent, week, csvguard, csvleak, mergedreport, pinguard, batchguard, mergegiveup) |
+| Playwright, real Worker, chromium-390 / chromium-1280 / webkit-390 / webkit-1280 | 164 passed (42 / 40 / 42 / 40), 0 failed, 0 skipped |
+| App negative controls | 7 of 7 red after an unbroken pass (boundary, statusleak, overlay, metoo, attribution, overdue, notestale) |
+| Map label unit | 4 passed |
+
+Worker numbers and six of the seven app controls come from the pin at `691a331`; the only later change was ts2's test fix for defect 10,
+so `worker/` and `app/public/` are byte-identical at `3d5a997`, where Playwright, the attribution control and the map unit test were
+re-run.
 
 ## Demo left running for Alexander
 

@@ -49,7 +49,7 @@ just open the links.
 |---|---|---|
 | Worker unit + API | `npm run test:worker` | unit 21 passed, API 50 passed, 0 failed, 0 skipped |
 | Worker negative controls | `npm run test:negative` | 13 of 13 went red after an unbroken pass |
-| App end to end, chromium + webkit at 390 and 1280, real Worker | `cd app && npx playwright test` | (pending) |
+| App end to end, chromium + webkit at 390 and 1280, real Worker | `cd app && npx playwright test` | 164 passed, 0 failed, 0 skipped |
 | App negative controls | `cd app && npm run negative` | 7 of 7 went red after an unbroken pass |
 | Map label unit test | `cd app && node --test tests/unit/map-labels.test.mjs` | 4 passed |
 
