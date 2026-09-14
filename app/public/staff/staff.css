@@ -1,0 +1,106 @@
+/* Town office (/staff/): desktop-first at 1280, usable at 390. Tokens live in theme.css. */
+
+.staff-top-in {
+  max-width: 1600px; margin: 0 auto; padding: 8px 16px; min-height: 60px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px;
+}
+.staff-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.nav-item {
+  display: inline-flex; align-items: center; min-height: var(--tap); padding: 0 14px; border-radius: var(--radius);
+  color: var(--ink); font-weight: 600; text-decoration: none;
+}
+.nav-item[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
+.btn-plain {
+  min-height: var(--tap); padding: 0 14px; background: var(--surface); color: var(--accent); border: 2px solid var(--line);
+  border-radius: var(--radius); font-weight: 700; cursor: pointer;
+}
+.link-btn { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 800; text-decoration: underline; cursor: pointer; min-height: var(--tap); }
+.staff-loading { max-width: 1600px; margin: 0 auto; padding: 16px; }
+
+/* ---- sign-in ---- */
+.signin-wrap { max-width: 440px; margin: 32px auto; padding: 0 16px; }
+.signin-wrap h1 { margin-top: 0; }
+
+/* ---- board ---- */
+.staff-main { max-width: 1600px; margin: 0 auto; padding: 16px; }
+.staff-main.with-detail { padding-right: 536px; }
+.filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; margin: 0 0 14px; }
+.filters .field-label { margin: 0 0 4px; font-size: 15px; }
+.filters select.field { min-width: 190px; }
+.check { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; font-weight: 600; cursor: pointer; }
+.check input { width: 22px; height: 22px; accent-color: var(--accent); }
+.board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.col { background: #e9eef2; border-radius: var(--radius); padding: 10px; min-height: 160px; }
+.col h2 { display: flex; align-items: center; justify-content: space-between; font-size: 17px; margin: 2px 4px 10px; }
+.count { min-width: 30px; padding: 0 8px; border-radius: 999px; background: var(--surface); color: var(--ink); text-align: center; font-size: 15px; }
+.cards { display: grid; gap: 8px; }
+.empty-col { color: var(--muted); font-size: 14px; margin: 4px; }
+.card-req {
+  display: grid; gap: 2px; width: 100%; padding: 10px 12px; text-align: left; font-size: 15px; line-height: 1.35; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 10px; cursor: pointer;
+}
+.card-req:hover { border-color: var(--accent); border-left-color: var(--accent); }
+.card-req.overdue, .card-req.overdue:hover { border-left-color: var(--overdue); }
+.card-req[aria-current="true"] { outline: 3px solid var(--accent); outline-offset: 1px; }
+.card-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; }
+.card-ref { font-weight: 800; white-space: nowrap; }
+.card-age { color: var(--muted); white-space: nowrap; }
+.card-cat { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.card-meta { color: var(--muted); font-size: 14px; }
+.card-overdue { color: var(--overdue); font-weight: 700; font-size: 14px; }
+.col-tabs { display: none; }
+.col-tab {
+  min-height: var(--tap); padding: 4px 6px; background: var(--surface); color: var(--ink); border: 2px solid var(--line);
+  border-radius: var(--radius); font-weight: 700; font-size: 15px; cursor: pointer;
+}
+.col-tab[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+
+@media (max-width: 1100px) {
+  .staff-main.with-detail { padding-right: 16px; }
+}
+@media (max-width: 759px) {
+  .col-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 0 10px; }
+  .board { grid-template-columns: 1fr; }
+  .col { display: none; }
+  .col.active { display: block; }
+  .filters > div, .filters select.field { width: 100%; }
+}
+
+/* ---- detail: side panel at 1280, full screen at 390 ---- */
+.detail {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 520px; z-index: 1100; overflow-y: auto; background: var(--surface);
+  border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(20, 33, 43, 0.14);
+}
+@media (max-width: 1100px) { .detail { left: 0; width: auto; border-left: 0; } }
+.detail-in { padding: 16px 20px 48px; }
+.detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.detail-head h2 { margin: 0; font-size: 26px; }
+.detail-head .back { margin-left: auto; }
+.detail h3 { font-size: 18px; margin: 24px 0 8px; }
+/* Inline, so the icon stays on the first line when the text wraps at 390. */
+.detail-what { font-weight: 600; margin: 12px 0 2px; }
+.detail-what .cat-icon { vertical-align: -5px; margin-right: 6px; }
+.detail-photo { display: block; width: 100%; max-height: 340px; object-fit: contain; background: var(--ground); border: 1px solid var(--line); border-radius: var(--radius); margin-top: 12px; }
+.detail-map { height: 220px; margin: 12px 0 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--accent-soft); }
+.detail .btn { width: 100%; }
+.row-inline { display: flex; gap: 8px; align-items: stretch; }
+.row-inline .field { flex: 1; min-width: 0; }
+.row-inline .btn { width: auto; flex: none; }
+.copy-text { font-size: 15px; min-height: 96px; margin-bottom: 8px; }
+.notes-label { display: inline-block; padding: 0 10px; border: 1px solid #f59e0b; border-radius: 999px; background: #fef3c7; color: #713f12; font-weight: 700; font-size: 14px; }
+.staff-only { display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 999px; background: #fef3c7; color: #713f12; font-size: 13px; font-weight: 700; }
+.history li.internal { background: #fffbeb; }
+.stale-box {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0 0; padding: 10px 12px; font-weight: 600;
+  background: var(--emergency-bg); color: var(--emergency-ink); border: 1px solid var(--emergency-edge); border-radius: var(--radius);
+}
+.stale-box .btn { width: auto; }
+.merged-list { list-style: none; margin: 0; padding: 0; }
+.merged-list li { padding: 8px 0; border-top: 1px solid var(--line); }
+.join-list { list-style: none; margin: 0; padding: 0; }
+.join-cand {
+  display: block; width: 100%; min-height: 48px; margin: 0 0 6px; padding: 8px 12px; text-align: left; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--field-edge); border-radius: 10px; cursor: pointer;
+}
+.join-cand:hover { border-color: var(--accent); }
+.confirm-box { margin: 12px 0 0; padding: 12px; background: var(--accent-soft); border-radius: var(--radius); }

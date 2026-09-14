@@ -175,3 +175,142 @@ export function contrast(a, b) {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
   return (hi + 0.05) / (lo + 0.05)
 }
+
+/* ---- more arranging and reading through the API ------------------------------------------ */
+export const statusPath = (url) => { const u = new URL(url); return u.pathname + u.search }
+
+export async function staffGet(request, token, id) {
+  const r = await api(request, 'GET', `/api/staff/requests/${id}`, { token })
+  expect(r.status, `GET staff request ${id}`).toBe(200)
+  return r.body
+}
+
+export async function staffList(request, token, query = '') {
+  const r = await api(request, 'GET', `/api/staff/requests${query}`, { token })
+  expect(r.status, `GET staff requests ${query}`).toBe(200)
+  return r.body
+}
+
+// Every request the Worker holds, merged ones included.
+export async function requestCount(request, token) {
+  const all = await staffList(request, token)
+  const merged = await staffList(request, token, '?status=merged')
+  return all.requests.length + merged.requests.length
+}
+
+// A staff change through the API at the request's current version (arranging, or "someone else at the counter").
+export async function staffPut(request, token, id, changes) {
+  const current = await staffGet(request, token, id)
+  const r = await api(request, 'PUT', `/api/staff/requests/${id}`, { token, data: { version: current.version, ...changes } })
+  expect(r.status, `PUT staff request ${id}: ${JSON.stringify(r.body)}`).toBe(200)
+  return r.body
+}
+
+export async function meToo(request, id) {
+  const r = await api(request, 'POST', `/api/requests/${id}/me-too`, { data: { device_id: crypto.randomUUID() } })
+  expect(r.status, `me-too on ${id}`).toBe(201)
+  return r.body
+}
+
+export async function mergeInto(request, token, id, intoId) {
+  const r = await api(request, 'POST', `/api/staff/requests/${id}/merge`, { token, data: { into_id: intoId } })
+  expect(r.status, `merge ${id} into ${intoId}: ${JSON.stringify(r.body)}`).toBe(200)
+  return r.body
+}
+
+// `at`: the same X-Test-Now the request was created with. Upload tokens expire an hour after they are issued, so a request made
+// "5 days ago" needs its photo sent at that time too.
+export async function putPhoto(request, created, { file = PHOTO, at } = {}) {
+  const headers = { Authorization: `Bearer ${created.upload_token}`, 'Content-Type': file.mimeType, ...(at ? { 'X-Test-Now': at } : {}) }
+  const r = await request.fetch(new URL(created.upload_url).pathname, { method: 'PUT', data: file.buffer, headers })
+  expect(r.status(), 'photo upload').toBe(200)
+}
+
+/* ---- staff app ------------------------------------------------------------------------------ */
+export async function signIn(page, pin = PIN) {
+  await page.goto('/staff/')
+  await typeText(page, page.locator('#pin'), pin, 'PIN')
+  await tap(page, page.locator('#signin-btn'), 'Sign in')
+  await expect(page.locator('#board')).toHaveAttribute('data-loaded', /\d+/)
+}
+
+// At 390 one column shows at a time and a tab switches it; at 1280 all five show.
+export async function showColumn(page, status) {
+  const tab = page.locator(`.col-tab[data-col="${status}"]`)
+  if (await tab.isVisible()) await tap(page, tab, `column tab ${status}`)
+  const col = page.locator(`.col[data-col="${status}"]`)
+  await expect(col).toBeVisible()
+  return col
+}
+
+export async function openCard(page, ref, status) {
+  const col = await showColumn(page, status)
+  await tap(page, col.locator(`[data-ref="${ref}"]`), `card ${ref}`)
+  await expect(page.locator('#detail-ref')).toHaveText(ref)
+}
+
+/* ---- the resident map ------------------------------------------------------------------------ */
+// Tap the screen point of [lat, lng] on a map, worked out from the map's own data-zoom / data-center-* (Web Mercator, 256 px
+// tiles) and hit-tested to the map first.
+export async function tapLatLng(page, locator, [lat, lng], label) {
+  await locator.scrollIntoViewIfNeeded()
+  const m = await locator.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    return { left: r.left + el.clientLeft, top: r.top + el.clientTop, w: el.clientWidth, h: el.clientHeight, zoom: Number(el.dataset.zoom), lat: Number(el.dataset.centerLat), lng: Number(el.dataset.centerLng) }
+  })
+  const scale = 256 * 2 ** m.zoom
+  const px = (la, ln) => [((ln + 180) / 360) * scale, ((1 - Math.log(Math.tan(Math.PI / 4 + (la * Math.PI) / 360)) / Math.PI) / 2) * scale]
+  const [cx, cy] = px(m.lat, m.lng)
+  const [x0, y0] = px(lat, lng)
+  const x = m.left + m.w / 2 + (x0 - cx)
+  const y = m.top + m.h / 2 + (y0 - cy)
+  expect(x > m.left + 50 && x < m.left + m.w - 10 && y > m.top + 10 && y < m.top + m.h - 50, `${label}: ${lat},${lng} is on the visible map (${Math.round(x)},${Math.round(y)})`).toBe(true)
+  expect(await hitAt(locator, x, y), `tapLatLng(${label}) hit-test at ${Math.round(x)},${Math.round(y)}`).toBe('')
+  if (await isTouch(page)) await page.touchscreen.tap(x, y)
+  else await page.mouse.click(x, y)
+}
+
+export async function zoomOutTo(page, zoom) {
+  const map = page.locator('#map')
+  let z = Number(await map.getAttribute('data-zoom'))
+  while (z > zoom) {
+    await tap(page, page.locator('#map .leaflet-control-zoom-out'), 'zoom out')
+    z -= 1
+    await expect(map).toHaveAttribute('data-zoom', String(z))
+  }
+}
+
+/* ---- privacy: what a page received ------------------------------------------------------------ */
+// Every response body the page receives from now on (HTML, scripts, styles and API answers).
+export function recordBodies(page) {
+  const bodies = []
+  page.on('response', async (r) => {
+    try { bodies.push({ url: r.url(), text: (await r.body()).toString('utf8') }) } catch {}
+  })
+  return bodies
+}
+
+/* ---- screenshots: a base map drawn from the town's own street lines (still nothing leaves 127.0.0.1) ---------- */
+export function streetStyle() {
+  const town = JSON.parse(readFileSync(path.join(HERE, '..', '..', 'data', 'town.json'), 'utf8'))
+  return {
+    version: 8,
+    name: 'Screenshot stand-in (town street lines from data/town.json)',
+    sources: {
+      streets: {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: town.streets.map((s) => ({ type: 'Feature', properties: { name: s.name }, geometry: { type: 'MultiLineString', coordinates: s.lines.map((run) => run.map(([la, ln]) => [ln, la])) } })) },
+      },
+    },
+    layers: [
+      { id: 'background', type: 'background', paint: { 'background-color': '#eef1f3' } },
+      { id: 'street-casing', type: 'line', source: 'streets', paint: { 'line-color': '#c9d1d8', 'line-width': 7 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+      { id: 'street', type: 'line', source: 'streets', paint: { 'line-color': '#ffffff', 'line-width': 5 }, layout: { 'line-cap': 'round', 'line-join': 'round' } },
+    ],
+  }
+}
+// Registered after the guard, so it answers the style request first (Playwright runs the newest matching route first).
+export async function useStreetStyle(context) {
+  const body = JSON.stringify(streetStyle())
+  await context.route('https://tiles.openfreemap.org/styles/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body }))
+}

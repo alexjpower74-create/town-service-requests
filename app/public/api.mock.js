@@ -28,8 +28,11 @@ const CATEGORIES = [
 ]
 const catLabel = (k) => CATEGORIES.find((c) => c.key === k)?.label
 const iso = (ms) => new Date(ms).toISOString()
-const dateLabel = (at) => new Intl.DateTimeFormat('en-US', { timeZone: ZONE, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(at)).replace(',', '')
-const fullLabel = (at) => `${dateLabel(at)}, ${new Intl.DateTimeFormat('en-US', { timeZone: ZONE, hour: 'numeric', minute: '2-digit' }).format(new Date(at))}`
+const LABEL_FORMAT = new Intl.DateTimeFormat('en-US', { timeZone: ZONE, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+const labelParts = (at) => Object.fromEntries(LABEL_FORMAT.formatToParts(new Date(at)).map((p) => [p.type, p.value]))
+const dateLabel = (at) => { const p = labelParts(at); return `${p.weekday} ${p.month} ${p.day}` }
+const fullLabel = (at) => { const p = labelParts(at); return `${p.weekday} ${p.month} ${p.day}, ${p.hour}:${p.minute} ${p.dayPeriod.toUpperCase()}` }
+const codePoints = (s) => [...s].length
 const randomKey = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(18)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 const label = (lat, lng) => nearestStreetByLines([lat, lng], TOWN.streets) || 'Not near a named street'
 
@@ -104,6 +107,15 @@ function town() {
   })
 }
 
+function locate(query) {
+  const num = (v) => (v === null || v.trim() === '' ? NaN : Number(v))
+  const lat = num(query.get('lat'))
+  const lng = num(query.get('lng'))
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return bad('Put a pin on the map where the problem is.', 'location')
+  const ward = TOWN.wards.find((w) => insideRing([lat, lng], w.polygon))?.id ?? null
+  return ok(200, { inside: insideRing([lat, lng], TOWN.boundary), location_label: label(lat, lng), ward })
+}
+
 function createAnswer(r, status, duplicate) {
   const waiting = r.photo === 'waiting'
   if (waiting) r.upload_token = randomKey()
@@ -119,23 +131,25 @@ function createAnswer(r, status, duplicate) {
 function create(b = {}) {
   const s = load()
   if (typeof b.submission_id !== 'string' || !UUID4.test(b.submission_id)) return bad(PHONE_MSG, 'submission_id')
-  const dup = s.requests.find((r) => r.submission_id === b.submission_id)
-  if (dup) return createAnswer(dup, 200, true)
-  if (b.device_id !== undefined && (typeof b.device_id !== 'string' || !UUID4.test(b.device_id))) return bad(PHONE_MSG, 'device_id')
+  if (b.device_id !== undefined && b.device_id !== null && (typeof b.device_id !== 'string' || !UUID4.test(b.device_id))) return bad(PHONE_MSG, 'device_id')
   if (!catLabel(b.category)) return bad('Pick what kind of problem it is.', 'category')
   if (!Number.isFinite(b.lat) || !Number.isFinite(b.lng)) return bad('Put a pin on the map where the problem is.', 'location')
   if (!insideRing([b.lat, b.lng], TOWN.boundary)) return fail(400, 'outside_boundary', OUTSIDE, 'location')
-  const description = typeof b.description === 'string' ? b.description.trim() : ''
-  if (description.length > 500) return bad('Keep it under 500 characters.', 'description')
+  const text = (v) => (v === undefined || v === null ? '' : typeof v === 'string' ? v.trim() : null)
+  const description = text(b.description)
+  if (description === null || codePoints(description) > 500) return bad('Keep it under 500 characters.', 'description')
   if (b.category === 'other' && !description) return bad('Tell us what the problem is.', 'description')
-  const name = typeof b.name === 'string' ? b.name.trim() : ''
-  if (name.length > 80) return bad('Keep your name under 80 characters.', 'name')
-  const phone = typeof b.phone === 'string' ? b.phone.trim() : ''
+  const name = text(b.name)
+  if (name === null || codePoints(name) > 80) return bad('Keep your name under 80 characters.', 'name')
+  const phone = text(b.phone)
+  if (phone === null) return bad(PHONE_BAD, 'phone')
   if (phone) {
     const digits = phone.replace(/[\s().+-]/g, '')
     if (phone.length > 30 || !/^\d{7,15}$/.test(digits)) return bad(PHONE_BAD, 'phone')
   }
   if (typeof b.has_photo !== 'boolean') return bad(PHONE_MSG, 'has_photo')
+  const dup = s.requests.find((r) => r.submission_id === b.submission_id)
+  if (dup) return createAnswer(dup, 200, true)
   const now = Date.now()
   const r = {
     id: s.nextId++, submission_id: b.submission_id, category: b.category, lat: b.lat, lng: b.lng,
@@ -159,8 +173,8 @@ function photo(id, headers, bytes, type) {
     if (mode === 'fail-once') try { sessionStorage.removeItem(PHOTO_KEY) } catch {}
     return fail(503, 'mock', 'The mock failed this upload on purpose.')
   }
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) return fail(415, 'unsupported_photo', "That kind of file can't be used. Take a photo or pick a JPEG or PNG.")
   if ((bytes?.size ?? 0) > 5_000_000) return fail(413, 'too_large', 'That photo is too big. Try another or skip the photo.')
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) return fail(415, 'unsupported_photo', "That kind of file can't be used. Take a photo or pick a JPEG or PNG.")
   if (r.photo === 'stored') return ok(200, { photo: 'stored', duplicate: true })
   r.photo = 'stored'
   r.photo_bytes = bytes.size
@@ -229,6 +243,7 @@ export async function handle(method, path, { json, bytes, type, headers = {} } =
   const p = url.pathname
   let m
   if (method === 'GET' && p === '/api/town') return town()
+  if (method === 'GET' && p === '/api/town/locate') return locate(url.searchParams)
   if (method === 'POST' && p === '/api/requests') return create(json)
   if (method === 'GET' && p === '/api/requests/nearby') return nearby(url.searchParams)
   if (method === 'PUT' && (m = /^\/api\/requests\/(\d+)\/photo$/.exec(p))) return photo(Number(m[1]), headers, bytes, type)

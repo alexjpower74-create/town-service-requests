@@ -46,16 +46,5 @@ export function nearestStreetByLines([lat, lng], streets, maxMetres = 150) {
   return best && best.d <= maxMetres ? best.name : null
 }
 
-// The phone's own hint under the map: GET /api/town sends one point per street (no lines), so this is the street whose point
-// is nearest, within maxMetres. The stored label is the Worker's (by segments) and is what the status link shows.
-export function nearestStreetByPoint(point, streets, maxMetres = 250) {
-  let best = null
-  for (const s of streets) {
-    const d = haversine(point, s.point)
-    if (!best || d < best.d) best = { d, name: s.name }
-  }
-  return best && best.d <= maxMetres ? best.name : null
-}
-
 // A point moved north by `metres` (1 m = 1 / 111195.0797 degrees of latitude on the 6 371 008.8 m sphere).
 export const north = ([lat, lng], metres) => [lat + metres / 111195.0797, lng]

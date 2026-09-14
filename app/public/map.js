@@ -72,6 +72,15 @@ export function townMap(el, town, { boundary = true } = {}) {
   }
   el.dataset.baseMap = vector ? 'vector' : 'unavailable'
   if (boundary) drawBoundary(map, town.boundary)
+  // Where the map is looking, as attributes (read by tests to tap a known point; nothing reads them back into the app).
+  const note = () => {
+    const c = map.getCenter()
+    el.dataset.zoom = String(map.getZoom())
+    el.dataset.centerLat = String(c.lat)
+    el.dataset.centerLng = String(c.lng)
+  }
+  map.on('moveend zoomend', note)
+  note()
   return map
 }
 

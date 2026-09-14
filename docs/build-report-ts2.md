@@ -195,3 +195,124 @@ in the next section, so each finding names the case that would show it. I edited
   served the app: `GET /` 200 `text/html`, `GET /s/` 200.
 - Stopped with `SIGTERM` to that pid only (start-worker forwards it to wrangler): the process exited and ports 8503 and 8513 were
   closed afterwards.
+
+## M2 — 2026-09-14
+
+`git rebase main` onto `0fa23c2` (ts1 M2a with `GET /api/town/locate`, my M2a): clean. **Note for the lead:** the prompt says
+clarifications 10–14 are in docs/API.md, but on main the Clarifications list still ends at 9. I followed the prompt as written: the
+same-crew and error-order fixes are ts1's, and join by typed reference is approved.
+
+### ts1's cross-review of my M1, fixed (DONE)
+- (a) "Near <street>" now comes from `GET /api/town/locate`, debounced 300 ms; only the answer for the latest pin is shown, and a
+  failed call leaves the hint out (`report.js` `locateSoon`/`cancelLocate`). The phone's nearest-point guess is removed from
+  `report.js` and `geo.js`. The phone's ray casting is still the only gate for **Next**.
+- (b) The description counter counts code points (`[...s].length`); so does the mock for description and name.
+- (c) Me too answered 409 or 404: the message shows and that card's button is removed, not re-enabled.
+- (d) A photo refused with 413 or 415 shows the API's text and **Take a different one**, which opens the file chooser and sends the new
+  photo to the same report. Other failures keep **Try the photo again**.
+- (e) Mock, cheap ones done: it validates the whole body before the duplicate lookup, accepts `device_id: null`, refuses a
+  non-string description, name or phone, checks 413 before 415, builds labels from `formatToParts`, and answers `/api/town/locate`.
+  Still no upload-token expiry and no staff routes. No spec uses the mock.
+
+### What I built (DONE)
+- **Town office `/staff/`** (`staff/index.html`, `staff.js`, `staff.css`), on the M1 routes:
+  - **Sign-in:** shows the API's text as is (401 "That PIN is not right.", and a 429's text once rate guards land). A 401 without a
+    `field` on any staff call clears the token and returns to sign-in with "Sign in again."
+  - **Top bar:** only Board and Sign out; Map, Weekly report and Settings are M3.
+  - **Board:** five columns with counts at 1280; at 390, a column switcher and one column. Filters for category, ward, age (Any age /
+    Older than 3, 7, 30 days) and Overdue only. Cards show ref, category icon and label, street, age ("Today" / "4 days"), +N, crew,
+    Photo, and the red edge with "Overdue by N days".
+  - **Detail** (side panel at 1280, full screen at 390): chip, category, street and ward, dates, +N, photo, description, name and a
+    `tel:` phone, a small map with the pin.
+  - **Save:** status, crew and public message. Only the fields that changed are sent, so setting a crew on a New report moves it to
+    Assigned as API.md says, and repeating a crew is never sent (this also avoids the same-crew bug I reported). Errors show next to
+    `status`, `crew_id` or `public_message`. On 409 `stale`, the API's message shows with **Reload**, which loads the `request` the
+    409 carried. A merged report shows "This report was joined with HP-…" and no form.
+  - **Copying and notes:** Copy update text, the status link with Copy and Open, notes with the yellow "Only town staff see notes"
+    label (adding one keeps unsaved form edits), history with "Staff only" on internal entries, and the reports joined into this one.
+  - **Join with another report:** likely duplicates from `candidates`, or type a reference (`HP-1003`, `hp1003` or `1003`; the same
+    report → "Pick a different report to join it with."; unknown → the API's 404 text), then an inline confirm "Join HP-x into HP-y
+    (…)? HP-x closes, and its +1s move to HP-y." → **Join them** opens the kept report.
+- **`api.js`:** `locate` and the staff routes with the token in localStorage (`tsr:staff-token`).
+- **`map.js`:** writes `data-zoom` / `data-center-lat` / `data-center-lng` on the map element, so a test can tap a known point.
+  Nothing reads them back.
+- **Specs:** `report`, `boundary`, `nearby`, `status`, `staff`, `merge`, `targets`, plus `shots` (tag `@shots`, chromium only).
+  Helpers gained `tapLatLng` (projects a lat/lng to the screen from the map's attributes with Web Mercator, then hit-tests),
+  `zoomOutTo`, `recordBodies` (every response body the page receives), the staff sign-in, column and card helpers, API arrangers,
+  and a screenshot base map drawn from `data/town.json` street lines.
+- **Negative controls:** `negative-lib.mjs` and the five controls in `app/tests/`, with `npm run negative` and one script each.
+- **`app/package.json` scripts:** `test`, `test:unit`, `shots`, `shots:m1`, `dev`, `negative`, `negative:<name>`.
+- **Old screenshots:** the 32 M1 mock screenshots are removed from `app/tests/shots/` (still in git history); every picture there is now
+  from the real Worker.
+
+### Verified, and how each could have failed
+- **Final full run on the committed code:** chromium-390 and chromium-1280 on 8503 (including `@shots`) **44 passed, 0 failed, 0
+  skipped** (1.1 min); webkit-390 and webkit-1280 on 8501 **40 passed, 0 failed, 0 skipped** (1.1 min). 84 of 84, 4 projects. Every test
+  resets the Worker first and fails if any request leaves 127.0.0.1 (the OpenFreeMap style is a local fixture). Real input only:
+  taps hit-tested with `elementFromPoint`, map taps at hit-tested points, the keyboard, the real file chooser, context geolocation,
+  and `selectOption` for native selects. Earlier per-project runs were also all green: chromium-1280 19/0, chromium-390 21/0, both
+  WebKit projects 40/0.
+- **Map-label unit test** after the `map.js` change: 4 pass, 0 fail.
+- **What the specs check, briefly:**
+  - **report:** HP-1001 with the photo stored as `image/jpeg` in the staff API. The phone, the name, the description and pieces of
+    each appear neither in the status page's text nor in **any response body the status page loaded**. The test first proves the
+    status JSON was recorded, and that the staff API holds those exact strings, so absence means something.
+  - **boundary:** zoom out to 12, tap the screen point of `outside_east_of_boundary` → `data-inside="false"`, the outside message, Next
+    disabled, 0 requests in the Worker (merged included); tap `inside_centre` → Next → photo step. Search "Main" → the pin equals Main
+    Street's point, and "Near Main Street" equals `/api/town/locate` for that point. Use my location on `on_street` → the pin there and
+    "Near Airbase Road"; on `outside_south` → the message and Next disabled.
+  - **nearby:** pin read from `data-lat`/`data-lng`, requests arranged 40 m and 60 m north and a streetlight 10 m away → exactly one card,
+    the 40 m one, "about 40 m from your pin" → Me too → "Thanks. We added you to HP-…", API `plus_ones` 1, still 3 requests; second run →
+    "already added", no Me too button; "No, mine is different" → photo step, still 3 requests.
+  - **status:** message and three history entries, no crew name; the joined link opens the kept report; a bad key → the plain 404 text.
+  - **staff:** wrong PIN → the text and a 401 via `waitForResponse`; board counts and cards equal the API for five statuses, then again
+    after the category filter; crew + message → Saved, the card in Assigned (and not New), API fields, and the status page shows the
+    message; an internal note in staff history and absent from the status page's text and every response body; Won't fix without a
+    message → a 400 and "Say why in the message to the public." next to the box; stale → a 409, the stale message, Reload shows the
+    other change at version 2.
+  - **merge:** candidate join → the kept report shows "+4 others reported this", equal to the API's `plus_ones` (2 + 1 + its reporter);
+    the duplicate is `merged` and its status page says "joined with HP-1001". Typed-reference join for a report 1.2 km away with no
+    candidates, including the same-report error, gives +1 and `merged_into` equal to the kept report.
+  - **targets:**
+    - Every visible resident button and button-link on each step (home, where, street list, nearby, photo, photo chosen, details,
+      sent) is at least 44 px, primaries at least 56 px, categories at least 64 px, and each hit-tests to itself, in chromium and
+      WebKit at 390.
+    - The SAMPLE badge and town name on `/`, `/s/` and `/staff/`, and no horizontal scroll at 390 on six screens.
+    - 4.5 : 1 contrast for all six status chips (real status pages, merged included), the banner text and link, the SAMPLE badge,
+      Next and Sign in.
+    - The attribution's three links are visible, have the right text and are not covered, at both sizes.
+- **Negative controls:** each copied `app/public` and `worker` into `app/.negative/<name>/` and ran on 8506. Every unbroken copy
+  passed first; every break went red on the check it targets. From `app/tests/negative-control.log`:
+  - (a) **boundary**, `report.js` `state.inside = insideRing([lat, lng], state.town.boundary)` → `state.inside = true`: red at
+    `expect(#where-label).toHaveAttribute('data-inside', 'false')` (boundary.spec:19).
+  - (b) **statusleak**, the copy's Worker adds `reporter_phone: row.reporter_phone` to the status JSON: red at "the response body of
+    http://127.0.0.1:8506/api/status/… never contains "709-555-0199"". The page itself never displays it, so only the response-body
+    check could catch this.
+  - (c) **overlay**, a transparent `position:absolute; inset:0` div over Send report: red at "tap(Send report) hit-test at 195,783:
+    something else is on top".
+  - (d) **metoo**, Me too calls `createRequest` instead of `meToo`: red at `#metoo-text` "Thanks. We added you to HP-1001." (it named the
+    new report).
+  - (e) **attribution**, `map.js` `ATTRIBUTION = ''`: red at "attribution link https://openfreemap.org … element(s) not found".
+- **A problem the runs showed, fixed:** the controls and a screenshot run shared Playwright's output folder, and Playwright empties it
+  when a run starts. One chromium-390 screenshot run died on missing trace files (not an assertion). `negative-lib.mjs` now gives
+  each control its own `--output` inside its copy. That screenshot run passed again on its own, and the final full run is above.
+- **A bug in my own helper, fixed:** a photo for a request arranged "5 days ago" was refused 401 because upload tokens expire an hour
+  after their (backdated) issue. `putPhoto` now sends the same `X-Test-Now`.
+- **I looked at the screenshots.** Resident: home, where (the street-line stand-in, pin on Main Street, "Near Main Street"), nearby
+  ("about 25 m", +2 others), photo, details, sent (HP-1002, Photo added), status (+2 others, no private details). Town office at 390
+  and 1280: sign-in, board with the red overdue edges, detail with photo, contact, map, history with Staff only entries and the note,
+  join confirm, after join. Two layout faults they showed, fixed and re-shot: at 1280 with the panel open, references wrapped
+  ("HP-" / "1001") on the squeezed cards (now nowrap, with the age wrapping below); at 390 the detail's category icon sat alone on its
+  own line (now inline).
+- `rig guard --agent ts2` after the commit (below).
+
+### Not done / left
+- Rate guards are not tested (ts1 adds them later). Sign-in shows any error's text as is, but no test sends a 429 yet.
+- Staff Map, Weekly report, Settings, crews and the M3 specs and control (f): M3.
+- The staff app does not refresh itself; the board reloads after each Save, note or join and when a filter changes.
+- Screenshots use the street-line stand-in base map (no internet in tests), so there are no street names or water on the maps.
+
+### For the lead
+1. **API.md clarifications 10–14 are not on main** (see the M2 note above).
+2. **Photo upload tokens and `X-Test-Now`:** a request created with a past `X-Test-Now` needs its photo uploaded with the same header,
+   or the token is already expired. That's correct per API.md; worth one line wherever demo seeding does the same.
