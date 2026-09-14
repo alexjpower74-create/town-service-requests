@@ -41,6 +41,9 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* `hidden` always hides, even on elements whose class sets a display (the staff nav is display: flex). */
+[hidden] { display: none !important; }
+
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 body {

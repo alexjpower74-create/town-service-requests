@@ -74,6 +74,28 @@ async function staff(method, path, json) {
 }
 
 const q = encodeURIComponent
+// A staff file (the CSV): a real fetch with the token, answered as { blob, filename } for a download.
+async function staffFile(path) {
+  const token = staffSession.get()
+  let res
+  try {
+    res = await fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: 'no-store' })
+  } catch {
+    throw new ApiError(0, NO_SIGNAL)
+  }
+  if (!res.ok) {
+    let data = null
+    try { data = await res.json() } catch {}
+    if (res.status === 401 && !data?.field) {
+      staffSession.clear()
+      window.dispatchEvent(new CustomEvent(SIGNED_OUT, { detail: data?.error || '' }))
+    }
+    throw new ApiError(res.status, data)
+  }
+  const filename = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '')?.[1] || 'town-service-requests.csv'
+  return { blob: await res.blob(), filename }
+}
+
 // upload_url is absolute (docs/API.md); the page still only ever talks to its own origin.
 const samePath = (url) => { const u = new URL(url, location.origin); return u.pathname + u.search }
 // Only the filters that are set; an empty value is the same as absent (API.md clarification 4).
@@ -104,5 +126,11 @@ export const api = {
     merge: (id, intoId) => staff('POST', `/api/staff/requests/${q(id)}/merge`, { into_id: intoId }),
     crews: () => staff('GET', '/api/staff/crews'),
     settings: () => staff('GET', '/api/staff/settings'),
+    saveSettings: (body) => staff('PUT', '/api/staff/settings', body),
+    changePin: (body) => staff('PUT', '/api/staff/pin', body),
+    addCrew: (name) => staff('POST', '/api/staff/crews', { name }),
+    updateCrew: (id, body) => staff('PUT', `/api/staff/crews/${q(id)}`, body),
+    weekly: (week) => staff('GET', `/api/staff/report/weekly${query({ week })}`),
+    exportCsv: (filters) => staffFile(`/api/staff/export.csv${query(filters)}`),
   },
 }

@@ -316,3 +316,129 @@ same-crew and error-order fixes are ts1's, and join by typed reference is approv
 1. **API.md clarifications 10–14 are not on main** (see the M2 note above).
 2. **Photo upload tokens and `X-Test-Now`:** a request created with a past `X-Test-Now` needs its photo uploaded with the same header,
    or the token is already expired. That's correct per API.md; worth one line wherever demo seeding does the same.
+
+## M3 — 2026-09-14
+
+### Step 0: rebase and the whole suite on the finished Worker
+- `git rebase main` onto `fb199ec` (ts1 M2c: rate guards, PIN change, crews, settings, weekly report, CSV, demo seed; my M2): clean.
+  API.md clarifications 10–20 are there now.
+- The whole M2 suite on 8503 against that Worker: **84 passed, 0 failed** (2.3 min), before any M3 change. Nothing broke, so there
+  was nothing to commit for step 0. The screenshot test that arranges 11 reports stayed under the 10-per-hour create guard only
+  because its reports are backdated and fall outside each other's hour. That is fragile, so M3 makes every arranged report use its own
+  `X-Test-IP` (below).
+
+### What I built (DONE)
+- **Views:** `#board` (default), `#map`, `#report` and `#settings`, in the top bar with Sign out. The board and the map share one
+  set of filters. The detail panel opens over the board, the map and the weekly report's oldest-open list.
+- **Map:**
+  - Leaflet.markercluster (vendored), grouping pins until zoom 17; `maxZoom` 19 on every map, which markercluster needs.
+  - Pins in the status colours with a red ring when overdue, a legend, and "N reports on the map".
+  - A cluster click zooms in; a pin click opens that report's detail.
+- **Weekly report:**
+  - Previous / Next week (Next is disabled on the current week).
+  - The table by category plus an "All categories" totals row, with "–" where nothing closed.
+  - "Open now" and "Overdue now", and the oldest open reports (each opens its detail).
+  - **Download CSV:** a `fetch` with the token, then a blob download named from the answer's `Content-Disposition`.
+- **Settings:**
+  - Emergency phone, office phone and office hours.
+  - SLA days per category: a blank box sends `null` (no target), whole numbers go as numbers, and anything else is sent as typed so
+    the Worker names the field.
+  - Crews: add, rename, deactivate or reactivate.
+  - Change PIN.
+  - Errors show next to their field, including `sla_days.<key>`.
+- **A wrong current PIN** (401 with field `current_pin`) shows inline and never signs out (clarification 17). Only a 401 without a
+  `field` ends the session.
+- **Sign-in** shows any error's text as is (401, and the 429 from the rate guard) and empties the PIN box for the next try.
+- **Emergency banner:** the resident banner already takes `emergency_phone` from `GET /api/town`. `emergency.spec` proves it end to
+  end.
+- **Specs, new:** `overdue`, `report-week`, `map`, `settings`, `emergency`. `staff.spec` gained the sign-in rate-guard test, and
+  `targets.spec`'s no-scroll test gained the map, report and settings views.
+- **Screenshot spec:** `shots.spec` now covers every screen in all four projects.
+- **Helpers:**
+  - `makeRequest` sends a fresh `X-Test-IP` per arranged report, so arranging data never uses up the create allowance of the IP the
+    browser sends from.
+  - `staffPut` takes an `at` (`X-Test-Now`).
+  - New: `goView`, `replaceText` (select all with the keyboard, then type, value asserted), `shiftDate`, and `mapReady` (style
+    loaded, or the no-WebGL background).
+- **Negative control (f):** `negative-overdue.mjs`. `npm run negative` now runs all six controls; each also has its own
+  `negative:<name>` script.
+
+### Bugs the new tests caught, fixed
+1. **The staff top bar showed on the sign-in page to anyone signed out** (live since M2). `#nav` has the `hidden` attribute, but
+   `.staff-nav { display: flex }` beat the browser's own `[hidden] { display: none }`. The rate-guard test's
+   `expect(#nav).toBeHidden()` went red in both chromium sizes. Fix: `[hidden] { display: none !important }` in `theme.css`, so no
+   class can override `hidden` anywhere. The re-taken sign-in screenshots show no nav.
+2. **The street hint moved Next under the user's thumb.** "Near <street>" arrives from `locate` about 300 ms after a pin. The empty
+   line took no space, so the answer pushed Next down. The screenshot test's `tap(Next)` hit-test landed on the section instead of the
+   button. Fix: the line keeps its height while empty (`style.css`).
+3. **A test race, not an app bug:** the crew test grabbed Deactivate while Rename was re-drawing the crew list, and got a detached
+   element. The crew list now carries a `data-rendered` count, and the test waits for it to change after each crew action.
+4. **Looked wrong in the screenshots:** on the 390 Map screen the two-row nav and three full-width filter boxes pushed the map below
+   the fold. At phone width the filters now sit two to a row, and the Map screenshot scrolls the map into view.
+
+### Verified, and how each could have failed
+- **Final run on the committed code, pass / fail / skip per project:**
+  - chromium-390: **32 / 0 / 0**
+  - chromium-1280: **30 / 0 / 0**
+  - webkit-390: **32 / 0 / 0**
+  - webkit-1280: **30 / 0 / 0**
+
+  **124 of 124.** Chromium ran on 8503 (1.5 min), WebKit on 8501 (2.2 min). Every test resets the Worker and fails if a request leaves
+  127.0.0.1, with real input only (hit-tested taps, keyboard, file chooser, geolocation, `selectOption`).
+- **What the M3 specs check:**
+  - **overdue:** a streetlight arranged 11 days + 1 hour ago (API: overdue, `overdue_days` 2, `age_days` 11) and a pothole 3 days ago.
+    The streetlight card has `data-overdue="true"`, "Overdue by 2 days" (equal to the API) and a 4 px `rgb(185, 28, 28)` left edge; the
+    pothole has none of them. "Overdue only" leaves exactly that card. Settings: streetlight 12 days → Saved, the API holds 12, and back
+    on the board the card is not overdue, with no text and no red edge (the API agrees).
+  - **report-week:** five reports created, and three closed, at chosen instants in the previous NL week through `X-Test-Now`. The API's
+    totals are asserted first (5 opened, 3 closed). On the page:
+    - The current week's label shows, and Next is disabled.
+    - After Previous week: every row's opened, closed and average, the totals, open now, overdue now and the oldest-open refs equal the
+      API's answer for that week.
+    - Next week goes back.
+    - The downloaded CSV equals `GET /api/staff/export.csv` byte for byte, with the same filename, the exact header and 6 lines, and
+      contains neither the phone (both forms) nor the name nor the description.
+  - **map:** 20 reports on a 30 m grid → one `.marker-cluster` reading "20" and no pins. Tapping it zooms in, the cluster is gone and
+    20 pins show. Tapping HP-1008's pin opens its detail. Pin colours: New `rgb(10, 92, 138)`, Assigned `rgb(91, 33, 182)`, and an
+    overdue streetlight has the `rgb(185, 28, 28)` ring. A category filter set on the board shows on the map, with 1 pin and "1 report
+    on the map."
+  - **settings:**
+    - A bad emergency phone → "Type a phone number like 709-555-0100." next to it. SLA 400 → "Use 1 to 365 days, or leave it blank for
+      no target." next to that box. A blank box → Saved and `null` in the API.
+    - Wrong current PIN → 401 with field `current_pin`, the message inline, still signed in (the nav works and 3690 still signs in).
+    - A new crew appears in a report's crew select; a rename and a deactivate reach the API; the deactivated crew is gone from the
+      select (4 options).
+    - PIN change → sign out → 3690 refused with 401 → 2468 signs in.
+  - **emergency:** the banner shows 709-555-0142; Settings → 709-555-0177 → Saved → the banner reads "…Call the town at 709-555-0177 or
+    911." with `href="tel:7095550177"`.
+  - **staff, rate guard:** five wrong PINs, each a 401 with "That PIN is not right." and an emptied box; then 3690 → 429
+    `rate_limited`, the page shows the body's `error` exactly ("Too many tries. Wait 15 minutes and try again."), no board, and the nav
+    stays hidden.
+- **All six negative controls** (from `app/tests/negative-control.log`, run against the M3 code on 8506, each in its own copy): every
+  unbroken copy passed first, every break went red.
+  - (a) boundary, (b) statusleak, (c) overlay, (d) metoo, (e) attribution: the same breaks as in M2, red again on the same
+    assertions.
+  - (f) **overdue**, `staff.js` `function card(r) {` + `r = { ...r, overdue: r.age_days > 10 }`: the unbroken copy passed (1 passed).
+    The broken copy went red at `overdue.spec:51` "no longer overdue after the SLA change" (`data-overdue` stayed `true`). Every
+    assertion before the SLA change passed, so it went red exactly where it should.
+  - The log has no machine paths.
+- **Map-label unit test:** still 4 pass, 0 fail.
+- **Screenshots:** 84 in `app/tests/shots/`, 21 screens × 4 projects, named `<project>-<area>-<step>-<screen>.png`. Resident: 1 home,
+  2 where with search, 3 where, 4 nearby, 5 photo, 6 photo chosen, 7 details, 8 sent, 9 Me too. Status: 1 new, 2 assigned with message,
+  3 joined, 4 not found. Staff: 1 sign-in, 2 board, 3 detail, 4 notes and history, 5 join confirm, 6 map, 7 weekly report, 8 settings.
+  The 28 M2 screenshots with un-numbered names are removed. I looked at the WebKit 1280 map, weekly report and settings, the WebKit 390
+  sign-in, map, board and settings, and the chromium 390 map, weekly report and where. Fault 4 above came from that look; the re-shots
+  are right.
+
+### For the lead
+1. **"A streetlight created 11 days ago shows Overdue by 1 day" can't hold on the real clock.** With a 10-day SLA,
+   `overdue_days = ceil(age − 10 days)`, so any age past exactly 11 days reads 2, and control (f)'s `age_days > 10` needs at least 11
+   days. I arranged 11 days + 1 hour and assert that the card shows the API's `overdue_days` (2). That way control (f) goes red at the
+   SLA change, as the prompt describes. If you want the literal "1 day", the streetlight has to be 10.x days old, and then (f) goes red
+   at the first board check instead.
+2. **Rate guards in tests:** arranged reports now each come from their own `X-Test-IP`. The app's own requests still come from `local`,
+   so the sign-in guard test measures the real IP path.
+
+### Not done / left
+- The board, map and report don't refresh by themselves; they reload after a change in the app and when a filter or view changes.
+- The mock (`?mock=1`) still has no staff routes; no spec uses it.

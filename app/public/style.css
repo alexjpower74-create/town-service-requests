@@ -77,8 +77,8 @@ p { margin: 8px 0; }
 .leaflet-control-attribution { font-size: 12px; background: rgba(255, 255, 255, 0.94) !important; color: var(--ink); }
 .leaflet-control-attribution a { color: var(--accent); }
 .pin-icon { background: none; border: 0; }
-.where-label { font-weight: 700; margin: 10px 0 0; }
-.where-label:empty { display: none; }
+/* The line is kept even while empty: the Worker's street name arrives ~300 ms after a pin, and must not push Next down under a thumb. */
+.where-label { font-weight: 700; margin: 10px 0 0; min-height: 1.45em; }
 .search { margin: 0 0 10px; }
 .search-list { list-style: none; margin: 6px 0 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
 .search-list:empty { display: none; }

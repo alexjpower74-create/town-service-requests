@@ -154,8 +154,10 @@ export async function staffToken(request, pin = PIN) {
 
 const uuid4 = () => crypto.randomUUID()
 // Arrange a request through the resident API. `at` (ISO) sets the server clock for that call (TEST_MODE X-Test-Now).
-export async function makeRequest(request, { category = 'pothole', point = POINTS.inside_centre, at, ...rest } = {}) {
-  const headers = at ? { 'X-Test-Now': at } : {}
+// Each arranged report comes from its own X-Test-IP, so arranging data never uses up the create allowance (10 an hour) of the IP the
+// browser under test sends from.
+export async function makeRequest(request, { category = 'pothole', point = POINTS.inside_centre, at, ip, ...rest } = {}) {
+  const headers = { 'X-Test-IP': ip || `arranged-${crypto.randomUUID()}`, ...(at ? { 'X-Test-Now': at } : {}) }
   const r = await api(request, 'POST', '/api/requests', {
     headers, data: { submission_id: uuid4(), device_id: uuid4(), category, lat: point[0], lng: point[1], has_photo: false, ...rest },
   })
@@ -199,9 +201,10 @@ export async function requestCount(request, token) {
 }
 
 // A staff change through the API at the request's current version (arranging, or "someone else at the counter").
-export async function staffPut(request, token, id, changes) {
+export async function staffPut(request, token, id, changes, at) {
   const current = await staffGet(request, token, id)
-  const r = await api(request, 'PUT', `/api/staff/requests/${id}`, { token, data: { version: current.version, ...changes } })
+  const headers = at ? { 'X-Test-Now': at } : {}
+  const r = await api(request, 'PUT', `/api/staff/requests/${id}`, { token, headers, data: { version: current.version, ...changes } })
   expect(r.status, `PUT staff request ${id}: ${JSON.stringify(r.body)}`).toBe(200)
   return r.body
 }
@@ -247,6 +250,39 @@ export async function openCard(page, ref, status) {
   const col = await showColumn(page, status)
   await tap(page, col.locator(`[data-ref="${ref}"]`), `card ${ref}`)
   await expect(page.locator('#detail-ref')).toHaveText(ref)
+}
+
+// Go to a town office view with the nav, and wait until that view has loaded its data.
+export async function goView(page, view) {
+  await tap(page, page.locator(`#nav a[data-view="${view}"]`), `nav ${view}`)
+  await expect(page.locator('#app')).toHaveAttribute('data-view', view)
+}
+
+// Replace what a filled-in field holds: tap it, select everything with the keyboard, then type. If the selection didn't take,
+// empty it with Backspace. The value is asserted either way.
+export async function replaceText(page, locator, text, label = 'field') {
+  await tap(page, locator, label)
+  await page.keyboard.press('ControlOrMeta+A')
+  await page.keyboard.press('Backspace')
+  const left = (await locator.inputValue()).length
+  if (left) {
+    await page.keyboard.press('End')
+    for (let i = 0; i < left; i++) await page.keyboard.press('Backspace')
+  }
+  await page.keyboard.type(text)
+  if ((await locator.inputValue()) !== text) {
+    const n = (await locator.inputValue()).length
+    for (let i = 0; i < n; i++) await page.keyboard.press('Backspace')
+    await page.keyboard.insertText(text)
+  }
+  await expect(locator, `${label} holds what was typed`).toHaveValue(text)
+}
+
+export const shiftDate = (ymd, days) => new Date(Date.parse(`${ymd}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+
+// A map is ready when its style has loaded, or when it has settled on the plain no-WebGL background.
+export async function mapReady(page, selector = '#map') {
+  await expect(page.locator(`${selector}[data-style-loaded="1"], ${selector}[data-base-map="unavailable"]`)).toHaveCount(1, { timeout: 20_000 })
 }
 
 /* ---- the resident map ------------------------------------------------------------------------ */
