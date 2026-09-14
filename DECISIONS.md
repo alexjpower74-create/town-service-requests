@@ -56,3 +56,9 @@ PLAN.md, API.md and reports can point at them.
 16. **Airport name labels are hidden too** (ts2's call, kept): OpenMapTiles airport names carry the real town's name. Street and water
     names stay visible.
 17. **Date labels have no comma after the weekday** ("Mon Sep 7"), matching the contract's examples (ts1's call, clarification 1).
+18. **Staff see the due date before a report is overdue** (ts1's cross-review of ts2 M2, finding 4): the detail shows "Due {due_label}"
+    for open reports with an SLA, and the board card keeps only the red "Overdue by N days" line. Knowing a streetlight is due Thursday
+    is the point of an SLA; waiting for the red edge is too late.
+19. **A save must never carry a version the form wasn't drawn from** (ts1's finding 1): after a note (or any answer that brings a newer
+    version) the form either re-renders from that answer or the save sends the version the form was rendered with, so the Worker's
+    stale check still fires. ts2 fixes it with a spec that proves the 409 appears.

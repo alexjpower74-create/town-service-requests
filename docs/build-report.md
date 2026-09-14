@@ -36,6 +36,11 @@ touched, and is gated on printed `*_EXIT=` lines.
    street and a 250 m limit, the Worker segments and 150 m. Fixed by `GET /api/town/locate` (clarification 9).
 7. **WebKit dropped the space before the emergency number** when the banner wrapped (ts2's M1 smoke). Fixed.
 
+8. **Saving after adding a note could silently undo another person's change** (ts1's read-only cross-review of ts2 M2, medium): the
+   note's answer replaced the page's copy of the report (with the newer version) but not the form, so Save sent the old form values with
+   the new version and the Worker accepted it. No Worker check can catch a client that sends the version it was just given. Sent to ts2
+   as a fix with a spec that proves the stale 409 appears (DECISIONS 19).
+
 ## Lead checks by eye
 - ts2 M1 screenshots (resident home 390, nearby 390, status 1280): SAMPLE on every screen, banner first, no private fields on status.
 - ts2 M2 real-Worker screenshots (staff board 1280, detail 390, join confirm 1280): overdue edges and counts right, `tel:` contact,
