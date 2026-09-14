@@ -1,0 +1,421 @@
+
+=== d7344ca +uncommitted worker changes negative:boundary 2026-09-14T20:24:31.558Z ===
+control (unbroken copy): "create: a pin outside the boundary is refused and no request is created" pass
+break: src/index.js: "  if (!pointInRing([lat, lng], TOWN.boundary)) {"  ->  "  if (false) {"
+✖ create: a pin outside the boundary is refused and no request is created (62.666514ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 143.797301
+
+✖ failing tests:
+
+test at tests/api.test.mjs:263:1
+✖ create: a pin outside the boundary is refused and no request is created (62.666514ms)
+  AssertionError [ERR_ASSERTION]: {"id":1001,"ref":"HP-1001","status_url":"http://127.0.0.1:8505/s/?k=TaLx7L1TGE5iMEHnDSz4sjkD","status_key":"TaLx7L1TGE5iMEHnDSz4sjkD","category_label":"Pothole","location_label":"Not near a named street","reported_label":"Mon Sep 7, 10:45 AM","photo":"none","upload_url":null,"upload_token":null,"upload_expires_at":null,"duplicate":false}
+  
+  201 !== 400
+  
+      at expectError (file://<repo>/worker/.negative/negative-boundary/tests/api.test.mjs:39:10)
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-boundary/tests/api.test.mjs:267:5)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 201,
+    expected: 400,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "create: a pin outside the boundary is refused and no request is created" fail when a pin outside the boundary is accepted.
+
+=== d7344ca +uncommitted worker changes negative:radius 2026-09-14T20:24:37.690Z ===
+control (unbroken copy): "nearby: a pothole at 40 m is found and one at 60 m is not" pass
+break: src/index.js: "const NEARBY_METRES = 50\n"  ->  "const NEARBY_METRES = 70\n"
+✖ nearby: a pothole at 40 m is found and one at 60 m is not (151.292813ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 216.166485
+
+✖ failing tests:
+
+test at tests/api.test.mjs:349:1
+✖ nearby: a pothole at 40 m is found and one at 60 m is not (151.292813ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  70 !== 50
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-radius/tests/api.test.mjs:362:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 70,
+    expected: 50,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "nearby: a pothole at 40 m is found and one at 60 m is not" fail when the nearby radius is 70 m instead of 50 m.
+
+=== d7344ca +uncommitted worker changes negative:mergecount 2026-09-14T20:24:43.949Z ===
+control (unbroken copy): "merge keeps the +1 count" pass
+break: src/index.js: "  const added = source.plus_ones + 1\n"  ->  "  const added = 1\n"
+✖ merge keeps the +1 count (194.994321ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 259.36565
+
+✖ failing tests:
+
+test at tests/api.test.mjs:740:1
+✖ merge keeps the +1 count (194.994321ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  3 !== 6
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-mergecount/tests/api.test.mjs:756:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 3,
+    expected: 6,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "merge keeps the +1 count" fail when a merge adds 1 instead of the source's plus_ones + 1.
+
+=== d7344ca +uncommitted worker changes negative:leak 2026-09-14T20:24:50.547Z ===
+control (unbroken copy): "public status never contains private fields" pass
+break: src/index.js: "    location_label: row.location_label, // public: the street name, never the pin\n"  ->  "    location_label: row.location_label, // public: the street name, never the pin\n    reporter_phone: row.reporter_phone,\n"
+✖ public status never contains private fields (160.075825ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 221.798454
+
+✖ failing tests:
+
+test at tests/api.test.mjs:410:1
+✖ public status never contains private fields (160.075825ms)
+  AssertionError [ERR_ASSERTION]: status must not contain "709-555-0199"
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-leak/tests/api.test.mjs:437:37)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+verdict: RED as expected. "public status never contains private fields" fail when the status JSON carries the reporter's phone.
+
+=== d7344ca +uncommitted worker changes negative:overdue 2026-09-14T20:24:56.735Z ===
+control (unbroken copy): "overdue on a fake clock through the API" pass
+break: src/sla.js: "  return isOpen(status) && dueAt !== null && now > dueAt\n"  ->  "  return isOpen(status) && dueAt !== null && now >= createdAt\n"
+✖ overdue on a fake clock through the API (88.583859ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 150.220638
+
+✖ failing tests:
+
+test at tests/api.test.mjs:581:1
+✖ overdue on a fake clock through the API (88.583859ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-overdue/tests/api.test.mjs:589:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "overdue on a fake clock through the API" fail when overdue ignores the SLA and compares now with created_at.
+
+=== d7344ca +uncommitted worker changes negative:idempotent 2026-09-14T20:25:02.820Z ===
+control (unbroken copy): "create: the same submission_id twice makes exactly one request" pass
+break: migrations/0001_init.sql: "  submission_id TEXT NOT NULL UNIQUE,\n"  ->  "  submission_id TEXT NOT NULL,\n"
+break: src/index.js: "  const existing = await findBySubmission(db, body.submission_id)\n"  ->  "  const existing = null\n"
+✔ create: the same submission_id twice makes exactly one request (122.643617ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 193.073508
+verdict: NOT RED as required (unbroken passed, broken exit 0, every named test red: false).
+
+=== d7344ca +uncommitted worker changes negative:idempotent 2026-09-14T20:26:42.416Z ===
+control (unbroken copy): "create: the same submission_id twice makes exactly one request" pass
+break: migrations/0001_init.sql: "  submission_id TEXT NOT NULL UNIQUE,\n"  ->  "  submission_id TEXT NOT NULL,\n"
+break: src/index.js: "  const existing = await findBySubmission(db, body.submission_id)\n"  ->  "  const existing = null\n"
+✖ create: the same submission_id twice makes exactly one request (67.81832ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 135.048667
+
+✖ failing tests:
+
+test at tests/api.test.mjs:275:1
+✖ create: the same submission_id twice makes exactly one request (67.81832ms)
+  AssertionError [ERR_ASSERTION]: {"id":1002,"ref":"HP-1002","status_url":"http://127.0.0.1:8505/s/?k=-jFfnhsgCNyqCe88vsRJZD2M","status_key":"-jFfnhsgCNyqCe88vsRJZD2M","category_label":"Pothole","location_label":"Ivanys Lane","reported_label":"Mon Sep 7, 10:45 AM","photo":"waiting","upload_url":"http://127.0.0.1:8505/api/requests/1002/photo","upload_token":"ih62oIzhsTpqKXyf8ojCKo8d","upload_expires_at":"2026-09-07T14:15:00.000Z","duplicate":false}
+  
+  201 !== 200
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-idempotent/tests/api.test.mjs:281:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 201,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "create: the same submission_id twice makes exactly one request" fail when a resent report is inserted again.
+
+=== 707901f negative:boundary 2026-09-14T20:27:06.156Z ===
+control (unbroken copy): "create: a pin outside the boundary is refused and no request is created" pass
+break: src/index.js: "  if (!pointInRing([lat, lng], TOWN.boundary)) {"  ->  "  if (false) {"
+✖ create: a pin outside the boundary is refused and no request is created (74.492963ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 158.174783
+
+✖ failing tests:
+
+test at tests/api.test.mjs:263:1
+✖ create: a pin outside the boundary is refused and no request is created (74.492963ms)
+  AssertionError [ERR_ASSERTION]: {"id":1001,"ref":"HP-1001","status_url":"http://127.0.0.1:8505/s/?k=nbhAJqhbUYpqW8oGEKFtEFGD","status_key":"nbhAJqhbUYpqW8oGEKFtEFGD","category_label":"Pothole","location_label":"Not near a named street","reported_label":"Mon Sep 7, 10:45 AM","photo":"none","upload_url":null,"upload_token":null,"upload_expires_at":null,"duplicate":false}
+  
+  201 !== 400
+  
+      at expectError (file://<repo>/worker/.negative/negative-boundary/tests/api.test.mjs:39:10)
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-boundary/tests/api.test.mjs:267:5)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 201,
+    expected: 400,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "create: a pin outside the boundary is refused and no request is created" fail when a pin outside the boundary is accepted.
+
+=== 707901f negative:radius 2026-09-14T20:27:12.822Z ===
+control (unbroken copy): "nearby: a pothole at 40 m is found and one at 60 m is not" pass
+break: src/index.js: "const NEARBY_METRES = 50\n"  ->  "const NEARBY_METRES = 70\n"
+✖ nearby: a pothole at 40 m is found and one at 60 m is not (199.532415ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 277.433839
+
+✖ failing tests:
+
+test at tests/api.test.mjs:349:1
+✖ nearby: a pothole at 40 m is found and one at 60 m is not (199.532415ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  70 !== 50
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-radius/tests/api.test.mjs:362:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 70,
+    expected: 50,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "nearby: a pothole at 40 m is found and one at 60 m is not" fail when the nearby radius is 70 m instead of 50 m.
+
+=== 707901f negative:mergecount 2026-09-14T20:27:19.736Z ===
+control (unbroken copy): "merge keeps the +1 count" pass
+break: src/index.js: "  const added = source.plus_ones + 1\n"  ->  "  const added = 1\n"
+✖ merge keeps the +1 count (194.013595ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 270.977702
+
+✖ failing tests:
+
+test at tests/api.test.mjs:740:1
+✖ merge keeps the +1 count (194.013595ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  3 !== 6
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-mergecount/tests/api.test.mjs:756:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 3,
+    expected: 6,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "merge keeps the +1 count" fail when a merge adds 1 instead of the source's plus_ones + 1.
+
+=== 707901f negative:leak 2026-09-14T20:27:26.896Z ===
+control (unbroken copy): "public status never contains private fields" pass
+break: src/index.js: "    location_label: row.location_label, // public: the street name, never the pin\n"  ->  "    location_label: row.location_label, // public: the street name, never the pin\n    reporter_phone: row.reporter_phone,\n"
+✖ public status never contains private fields (220.865836ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 301.801286
+
+✖ failing tests:
+
+test at tests/api.test.mjs:410:1
+✖ public status never contains private fields (220.865836ms)
+  AssertionError [ERR_ASSERTION]: status must not contain "709-555-0199"
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-leak/tests/api.test.mjs:437:37)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+verdict: RED as expected. "public status never contains private fields" fail when the status JSON carries the reporter's phone.
+
+=== 707901f negative:overdue 2026-09-14T20:27:34.327Z ===
+control (unbroken copy): "overdue on a fake clock through the API" pass
+break: src/sla.js: "  return isOpen(status) && dueAt !== null && now > dueAt\n"  ->  "  return isOpen(status) && dueAt !== null && now >= createdAt\n"
+✖ overdue on a fake clock through the API (118.150392ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 193.848517
+
+✖ failing tests:
+
+test at tests/api.test.mjs:581:1
+✖ overdue on a fake clock through the API (118.150392ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-overdue/tests/api.test.mjs:589:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "overdue on a fake clock through the API" fail when overdue ignores the SLA and compares now with created_at.
+
+=== 707901f negative:idempotent 2026-09-14T20:27:41.244Z ===
+control (unbroken copy): "create: the same submission_id twice makes exactly one request" pass
+break: migrations/0001_init.sql: "  submission_id TEXT NOT NULL UNIQUE,\n"  ->  "  submission_id TEXT NOT NULL,\n"
+break: src/index.js: "  const existing = await findBySubmission(db, body.submission_id)\n"  ->  "  const existing = null\n"
+✖ create: the same submission_id twice makes exactly one request (78.636603ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 153.492351
+
+✖ failing tests:
+
+test at tests/api.test.mjs:275:1
+✖ create: the same submission_id twice makes exactly one request (78.636603ms)
+  AssertionError [ERR_ASSERTION]: {"id":1002,"ref":"HP-1002","status_url":"http://127.0.0.1:8505/s/?k=ZI2-Z5KlI1woYk_ITeMawsOB","status_key":"ZI2-Z5KlI1woYk_ITeMawsOB","category_label":"Pothole","location_label":"Ivanys Lane","reported_label":"Mon Sep 7, 10:45 AM","photo":"waiting","upload_url":"http://127.0.0.1:8505/api/requests/1002/photo","upload_token":"vLinMuolCYPiVlpnNp2eGU4h","upload_expires_at":"2026-09-07T14:15:00.000Z","duplicate":false}
+  
+  201 !== 200
+  
+      at TestContext.<anonymous> (file://<repo>/worker/.negative/negative-idempotent/tests/api.test.mjs:281:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 201,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+verdict: RED as expected. "create: the same submission_id twice makes exactly one request" fail when a resent report is inserted again.
