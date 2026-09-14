@@ -45,12 +45,13 @@ just open the links.
 
 ## Tests
 
-| Suite | Command | Result at final QA |
+| Suite | Command | Result at final QA (pinned QA worktree, port 8509) |
 |---|---|---|
-| Worker unit + API | `npm run test:worker` | (final numbers pending) |
-| Worker negative controls | `npm run test:negative` | (pending) |
+| Worker unit + API | `npm run test:worker` | unit 21 passed, API 50 passed, 0 failed, 0 skipped |
+| Worker negative controls | `npm run test:negative` | 13 of 13 went red after an unbroken pass |
 | App end to end, chromium + webkit at 390 and 1280, real Worker | `cd app && npx playwright test` | (pending) |
-| App negative controls | `cd app && npm run negative` | (pending) |
+| App negative controls | `cd app && npm run negative` | 7 of 7 went red after an unbroken pass |
+| Map label unit test | `cd app && node --test tests/unit/map-labels.test.mjs` | 4 passed |
 
 Every important check has a negative control: a copy of the code is broken on purpose (the boundary check skipped, the nearby radius
 widened, a phone number leaked into the status page or the CSV, UTC weeks instead of NL weeks, an overlay over a button, and more) and
