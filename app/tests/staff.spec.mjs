@@ -139,7 +139,7 @@ test('a report someone else changed shows the stale message, and Reload shows th
   await signIn(page)
   await openCard(page, created.ref, 'new')
   const token = await staffToken(request)
-  await staffPut(request, token, created.id, { public_message: OTHER })
+  await staffPut(request, token, created.id, { crew_id: 1, public_message: OTHER })
 
   await typeText(page, page.locator('#d-message'), 'My own message (SAMPLE)', 'public message')
   const answer = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes(`/api/staff/requests/${created.id}`))
@@ -150,6 +150,82 @@ test('a report someone else changed shows the stale message, and Reload shows th
   await expect(page.locator('#d-message')).toHaveValue(OTHER)
   await expect(page.locator('.detail-in')).toHaveAttribute('data-version', '2')
   expect((await staffGet(request, token, created.id)).public_message).toBe(OTHER)
+  // Reload also reloads the board: the card is in Assigned, where the other change put it.
+  await tap(page, page.locator('#detail-close'), 'Close')
+  const assigned = await showColumn(page, 'assigned')
+  await expect(assigned.locator(`[data-ref="${created.ref}"]`)).toBeVisible()
+  await expect(page.locator(`.col[data-col="new"] [data-ref="${created.ref}"]`)).toHaveCount(0)
   // Sanity: the token the test used is a real staff session.
   expect((await api(request, 'GET', '/api/staff/crews', { token })).status).toBe(200)
+})
+
+const isPut = (id) => (r) => r.request().method() === 'PUT' && r.url().includes(`/api/staff/requests/${id}`)
+
+test('a Save after adding a note never undoes a change made meanwhile: it answers 409 and shows the stale box', async ({ page, request }) => {
+  const created = await makeRequest(request)
+  await signIn(page)
+  await openCard(page, created.ref, 'new')
+  const token = await staffToken(request)
+  // Someone else assigns a crew while the form still shows New and No crew.
+  await staffPut(request, token, created.id, { crew_id: 1 })
+
+  await typeText(page, page.locator('#note-text'), 'Called the resident back. (SAMPLE)', 'note')
+  await tap(page, page.locator('#add-note'), 'Add note')
+  await expect(page.locator('#d-history li.internal', { hasText: 'Called the resident back.' })).toBeVisible()
+  await typeText(page, page.locator('#d-message'), 'Looking at it this week. (SAMPLE)', 'public message')
+  const answer = page.waitForResponse(isPut(created.id))
+  await tap(page, page.locator('#save'), 'Save')
+  expect((await answer).status(), 'the Save meets the stale check').toBe(409)
+  await expect(page.locator('#stale')).toContainText('Someone else changed this report.')
+  const after = await staffGet(request, token, created.id)
+  expect(after.status, 'the other change is not undone').toBe('assigned')
+  expect(after.crew_id).toBe(1)
+  expect(after.public_message).toBeNull()
+})
+
+test('a Save after the session ended goes to the sign-in screen without a page error', async ({ page, request }) => {
+  const errors = []
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
+  page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console: ${m.text()}`) })
+  const created = await makeRequest(request)
+  await signIn(page)
+  await openCard(page, created.ref, 'new')
+  // End this page's own session through the API (reading the token, never setting app state).
+  const token = await page.evaluate(() => localStorage.getItem('tsr:staff-token'))
+  expect((await api(request, 'POST', '/api/staff/signout', { token })).status).toBe(200)
+
+  await typeText(page, page.locator('#d-message'), 'Too late (SAMPLE)', 'public message')
+  const answer = page.waitForResponse(isPut(created.id))
+  await tap(page, page.locator('#save'), 'Save')
+  expect((await answer).status()).toBe(401)
+  await expect(page.locator('#pin')).toBeVisible()
+  await expect(page.locator('#pin-error')).toHaveText('Sign in again.')
+  await expect(page.locator('#detail')).toBeHidden()
+  await page.waitForTimeout(500)
+  expect(errors, 'no page error after the sign-in screen shows').toEqual([])
+})
+
+test('the detail shows the due date for an open report with an SLA, and not once it is done', async ({ page, request }) => {
+  const created = await makeRequest(request)
+  const token = await staffToken(request)
+  const staff = await staffGet(request, token, created.id)
+  expect(staff.due_label).toBeTruthy()
+  await signIn(page)
+  await openCard(page, created.ref, 'new')
+  await expect(page.locator('#d-due')).toHaveText(`Due ${staff.due_label}`)
+  await page.locator('#d-status').selectOption('done')
+  await tap(page, page.locator('#save'), 'Save')
+  await expect(page.locator('#save-ok')).toHaveText('Saved.')
+  await expect(page.locator('#d-due')).toHaveCount(0)
+})
+
+test('a crew deactivated from another session is gone from the crew list when a report opens', async ({ page, request }) => {
+  const created = await makeRequest(request)
+  await signIn(page)
+  const token = await staffToken(request)
+  const r = await api(request, 'PUT', '/api/staff/crews/3', { token, data: { name: 'Parks and trees crew (SAMPLE)', active: false } })
+  expect(r.status).toBe(200)
+  await openCard(page, created.ref, 'new')
+  await expect(page.locator('#d-crew option[value="3"]')).toHaveCount(0)
+  await expect(page.locator('#d-crew option')).toHaveCount(3)
 })

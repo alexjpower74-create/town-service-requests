@@ -548,7 +548,9 @@ app.addEventListener('click', (e) => {
 /* ---- detail --------------------------------------------------------------------------------------- */
 async function openDetail(id, notice = '') {
   try {
-    const d = await api.staff.request(id)
+    // Crews come fresh with every report, so one deactivated from another session is not offered.
+    const [d] = await Promise.all([api.staff.request(id), loadCrews()])
+    if (!staffSession.get()) return
     state.join = null
     state.detail = d
     renderDetail(notice)
@@ -576,6 +578,8 @@ function renderDetail(notice = '') {
   const d = state.detail
   if (detailMap) { detailMap.remove(); detailMap = null }
   const merged = d.status === 'merged'
+  // What the form is drawn from. Save compares against this and sends its version, whatever newer answer arrives later.
+  state.form = { version: d.version, status: d.status, crew_id: d.crew_id, public_message: d.public_message || '' }
   const crews = state.crews.filter((c) => c.active || c.id === d.crew_id)
   const crewOptions = options([['', 'No crew'], ...crews.map((c) => [c.id, c.active ? c.name : `${c.name} (not active)`])], d.crew_id ?? '')
   const contact = d.reporter_name || d.reporter_phone
@@ -621,6 +625,7 @@ function renderDetail(notice = '') {
       ${notice && notice !== 'saved' ? `<p class="ok" id="detail-notice" role="status">${esc(notice)}</p>` : ''}
       <p class="detail-what"><span class="cat-icon sm">${categoryIcon(d.category)}</span>${esc(d.category_label)} · ${esc(d.location_label)}${d.ward_name ? ` · ${esc(d.ward_name)}` : ''}</p>
       <p class="muted small">Reported ${esc(d.created_label)} · ${ageText(d.age_days)}${d.closed_label ? ` · Closed ${esc(d.closed_label)}` : ''}</p>
+      ${['new', 'assigned', 'in_progress'].includes(d.status) && d.due_label ? `<p class="small" id="d-due">Due ${esc(d.due_label)}</p>` : ''}
       ${d.overdue ? `<p class="card-overdue" id="d-overdue">Overdue by ${plural(d.overdue_days, 'day')}</p>` : ''}
       <p id="detail-plus"${d.plus_ones ? '' : ' hidden'}>${others(d.plus_ones)}</p>
       ${merged ? `<p class="merged-box" id="d-merged-into">This report was joined with <button type="button" class="link-btn" data-open="${d.merged_into.id}">${esc(d.merged_into.ref)}</button>. Change that one instead.</p>` : ''}
@@ -671,14 +676,17 @@ async function save() {
   $('save-error').textContent = ''
   $('save-ok').textContent = ''
   $('stale-slot').innerHTML = ''
-  // Only what changed goes in the body, so "set a crew on a New report" moves it to Assigned as API.md says.
-  const body = { version: d.version }
+  // Only what changed goes in the body, so "set a crew on a New report" moves it to Assigned as API.md says. The version and "what
+  // changed" both come from what the form was drawn from, never from a newer answer (a note's): otherwise a Save could silently undo
+  // someone else's change instead of meeting the Worker's stale check (DECISIONS 19).
+  const f = state.form
+  const body = { version: f.version }
   const status = $('d-status').value
-  if (status !== d.status) body.status = status
+  if (status !== f.status) body.status = status
   const crew = $('d-crew').value === '' ? null : Number($('d-crew').value)
-  if (crew !== d.crew_id) body.crew_id = crew
+  if (crew !== f.crew_id) body.crew_id = crew
   const message = $('d-message').value
-  if (message.trim() !== (d.public_message || '')) body.public_message = message
+  if (message.trim() !== f.public_message) body.public_message = message
   const btn = $('save')
   btn.disabled = true
   btn.textContent = 'Saving…'
@@ -687,6 +695,7 @@ async function save() {
     renderDetail('saved')
     refreshView()
   } catch (e) {
+    if (!$('save-form')) return // the session ended: the sign-in screen has replaced the panel
     if (e.code === 'stale' && e.body.request) {
       $('stale-slot').innerHTML = `<div class="stale-box" id="stale" role="alert"><span>${esc(e.message)}</span><button type="button" class="btn btn-secondary" id="stale-reload">Reload</button></div>`
       state.stale = e.body.request
@@ -712,45 +721,55 @@ async function addNote() {
     $('copy-text').value = state.detail.copy_update
     $('note-text').value = ''
   } catch (e) {
-    $('err-text').textContent = e.message
+    if ($('err-text')) $('err-text').textContent = e.message
   } finally {
     btn.disabled = false
   }
 }
 
 /* ---- join with another report --------------------------------------------------------------------- */
+function joinCandidatesHtml(j) {
+  if (j.candidates === null) return '<p class="muted">Looking for likely duplicates…</p>'
+  if (!j.candidates.length) return '<p class="muted" id="join-none">No open reports of the same kind within 200 m.</p>'
+  return `<p>Likely the same problem:</p><ul class="join-list" id="join-candidates">${j.candidates.map((c) => `
+    <li><button type="button" class="join-cand" data-cand="${c.id}"><strong>${esc(c.ref)}</strong> · ${esc(c.category_label)} · ${esc(c.location_label)} · about ${c.distance_m} m · ${esc(c.status_label)}${c.plus_ones ? ` · +${c.plus_ones}` : ''}</button></li>`).join('')}</ul>`
+}
+
+function joinConfirmHtml(d, t) {
+  if (!t) return ''
+  return `
+    <div class="confirm-box" id="join-confirm" role="alert">
+      <p>Join <strong>${esc(d.ref)}</strong> into <strong>${esc(t.ref)}</strong> (${esc(t.category_label)}, ${esc(t.location_label)})? ${esc(d.ref)} closes, and its +1s move to ${esc(t.ref)}.</p>
+      <p class="field-error" id="join-confirm-error" role="alert"></p>
+      <div class="btn-row"><button type="button" class="btn btn-primary" id="join-yes">Join them</button><button type="button" class="btn btn-secondary" id="join-cancel">Cancel</button></div>
+    </div>`
+}
+
+// The join area is drawn once; after that only its parts change (the likely duplicates arriving, an error, the confirm), so the
+// reference box is never replaced while someone is typing in it.
 function renderJoin() {
   const slot = $('join-slot')
   if (!slot) return
   const d = state.detail
   const j = state.join
-  let inner = '<button type="button" class="btn btn-secondary" id="join-open">Join with another report</button>'
-  if (j) {
-    const list = j.candidates === null
-      ? '<p class="muted">Looking for likely duplicates…</p>'
-      : j.candidates.length
-        ? `<p>Likely the same problem:</p><ul class="join-list" id="join-candidates">${j.candidates.map((c) => `
-            <li><button type="button" class="join-cand" data-cand="${c.id}"><strong>${esc(c.ref)}</strong> · ${esc(c.category_label)} · ${esc(c.location_label)} · about ${c.distance_m} m · ${esc(c.status_label)}${c.plus_ones ? ` · +${c.plus_ones}` : ''}</button></li>`).join('')}</ul>`
-        : '<p class="muted" id="join-none">No open reports of the same kind within 200 m.</p>'
-    const t = j.target
-    const confirm = t ? `
-      <div class="confirm-box" id="join-confirm" role="alert">
-        <p>Join <strong>${esc(d.ref)}</strong> into <strong>${esc(t.ref)}</strong> (${esc(t.category_label)}, ${esc(t.location_label)})? ${esc(d.ref)} closes, and its +1s move to ${esc(t.ref)}.</p>
-        <p class="field-error" id="join-confirm-error" role="alert"></p>
-        <div class="btn-row"><button type="button" class="btn btn-primary" id="join-yes">Join them</button><button type="button" class="btn btn-secondary" id="join-cancel">Cancel</button></div>
-      </div>` : ''
-    inner = `
+  if (j && $('join')) {
+    $('join-cands').innerHTML = joinCandidatesHtml(j)
+    $('join-error').textContent = j.error || ''
+    $('join-confirm-slot').innerHTML = joinConfirmHtml(d, j.target)
+    return
+  }
+  const inner = j ? `
       <div id="join">
-        ${list}
+        <div id="join-cands">${joinCandidatesHtml(j)}</div>
         <label class="field-label" for="join-ref">Or type a reference</label>
         <div class="row-inline">
           <input class="field" id="join-ref" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="HP-1003" value="${esc(j.typed || '')}">
           <button type="button" class="btn btn-secondary" id="join-find">Find</button>
         </div>
         <p class="field-error" id="join-error" role="alert">${esc(j.error || '')}</p>
-        ${confirm}
+        <div id="join-confirm-slot">${joinConfirmHtml(d, j.target)}</div>
       </div>`
-  }
+    : '<button type="button" class="btn btn-secondary" id="join-open">Join with another report</button>'
   slot.innerHTML = `
     <h3>Join with another report</h3>
     <p class="muted small">If this is the same problem as another report, join it into that one. This one closes and its +1s move over.</p>
@@ -783,8 +802,12 @@ async function findTyped() {
   const id = Number(m[1])
   if (id === state.detail.id) { j.error = 'Pick a different report to join it with.'; return renderJoin() }
   try {
-    j.target = await api.staff.request(id)
+    const t = await api.staff.request(id)
+    // A report that was itself joined can't keep another one: say so now, with no Join button (the Worker would answer 409).
+    if (t.status === 'merged' && t.merged_into) j.error = `${t.ref} was itself joined with ${t.merged_into.ref}. Join with ${t.merged_into.ref} instead.`
+    else j.target = t
   } catch (e) {
+    if (!$('join-slot')) return
     j.error = e.message
   }
   renderJoin()
@@ -803,6 +826,7 @@ async function confirmJoin() {
     renderDetail(`Joined ${d.ref} into this report.`)
     refreshView()
   } catch (e) {
+    if (!$('join-confirm-error')) return
     $('join-confirm-error').textContent = e.message
     btn.disabled = false
   }
@@ -819,7 +843,7 @@ panel.addEventListener('click', (e) => {
   const t = e.target
   const id = t.closest('button')?.id
   if (id === 'detail-close') return closeDetail()
-  if (id === 'stale-reload') { state.detail = state.stale; state.stale = null; return renderDetail() }
+  if (id === 'stale-reload') { state.detail = state.stale; state.stale = null; renderDetail(); return refreshView() }
   if (id === 'copy-update') return copyText($('copy-text'), $('copy-update'))
   if (id === 'copy-link') return copyText($('d-status-link'), $('copy-link'))
   if (id === 'add-note') return addNote()
