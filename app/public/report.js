@@ -2,23 +2,29 @@
 // nearby" (only when the API finds any) → photo (optional, made smaller on the phone) → details → Report sent.
 // The report is never blocked by the photo: it is created first, then the photo goes up with its upload token.
 // submission_id is made once per report and reused on every retry, so resending never makes a second report.
+// "Near <street>" under the map is the Worker's own label (GET /api/town/locate, API.md clarification 9); the phone's ray casting
+// is only the instant gate for Next.
 import { api } from '/api.js'
 import { esc, brandBar, telHref, chip, categoryIcon, BACK_ICON, uuid, deviceId, readJson, writeJson } from '/ui.js'
-import { insideRing, nearestStreetByPoint } from '/geo.js'
+import { insideRing } from '/geo.js'
 import { townMap, pinIcon } from '/map.js'
 
 export const OUTSIDE = 'That spot is outside the town. Move the pin inside the line on the map.'
 const PHOTO_FAILED = "Your report was sent, but the photo didn't go through."
 const MAX_SIDE = 1600
 const JPEG_QUALITY = 0.7
+const LOCATE_DELAY_MS = 300
 const REPORTS_KEY = 'tsr:reports'
 const METOO_KEY = 'tsr:me-too'
 const STEPS = ['home', 'where', 'nearby', 'metoo', 'photo', 'details', 'sent']
 
 const $ = (id) => document.getElementById(id)
-const state = { town: null, category: null, submissionId: null, pin: null, inside: false, place: '', nearby: [], photo: null, body: null, created: null }
+const codePoints = (s) => [...s].length // the Worker counts characters this way
+const state = { town: null, category: null, submissionId: null, pin: null, inside: false, nearby: [], photo: null, body: null, created: null }
 let map = null
 let marker = null
+let locateTimer = null
+let locateSeq = 0
 
 function show(step) {
   for (const s of STEPS) $(`step-${s}`).hidden = s !== step
@@ -82,7 +88,6 @@ function startReport(key) {
   state.submissionId = uuid()
   state.pin = null
   state.inside = false
-  state.place = ''
   state.nearby = []
   state.body = null
   state.created = null
@@ -94,7 +99,7 @@ function startReport(key) {
   for (const el of document.querySelectorAll('[data-chosen]')) el.innerHTML = `<span class="cat-icon sm">${categoryIcon(key)}</span>${esc(state.category.label)}`
   $('where-error').textContent = ''
   $('where-note').textContent = ''
-  $('where-label').textContent = ''
+  cancelLocate()
   for (const a of ['lat', 'lng', 'inside']) delete $('where-label').dataset[a]
   $('where-next').disabled = true
   closeSearch()
@@ -104,13 +109,34 @@ function startReport(key) {
     map.on('click', (ev) => setPin(ev.latlng.lat, ev.latlng.lng))
   } else {
     if (marker) { marker.remove(); marker = null }
-    map.setView(state.town.center, state.town.zoom)
+    map.setView(state.town.center, state.town.zoom, { animate: false })
   }
   requestAnimationFrame(() => map.invalidateSize())
 }
 
 /* ---- step 2: where ------------------------------------------------------------ */
-function setPin(lat, lng, streetName = null) {
+function cancelLocate() {
+  clearTimeout(locateTimer)
+  locateSeq++
+  $('where-label').textContent = ''
+}
+
+// Debounced; only the answer for the latest pin is shown; a failed call just leaves the hint out.
+function locateSoon(lat, lng) {
+  cancelLocate()
+  const seq = locateSeq
+  locateTimer = setTimeout(async () => {
+    try {
+      const r = await api.locate(lat, lng)
+      if (seq !== locateSeq) return
+      $('where-label').textContent = r.location_label === 'Not near a named street' ? r.location_label : `Near ${r.location_label}`
+    } catch {
+      if (seq === locateSeq) $('where-label').textContent = ''
+    }
+  }, LOCATE_DELAY_MS)
+}
+
+function setPin(lat, lng) {
   state.pin = { lat, lng }
   if (!marker) {
     marker = L.marker([lat, lng], { icon: pinIcon(), draggable: true, keyboard: false, title: 'Your pin', alt: 'Your pin' }).addTo(map)
@@ -126,15 +152,14 @@ function setPin(lat, lng, streetName = null) {
   label.dataset.inside = String(state.inside)
   $('where-note').textContent = ''
   if (!state.inside) {
-    label.textContent = ''
+    cancelLocate()
     $('where-error').textContent = OUTSIDE
     $('where-next').disabled = true
     return
   }
   $('where-error').textContent = ''
-  state.place = streetName || nearestStreetByPoint([lat, lng], state.town.streets)
-  label.textContent = state.place ? `Near ${state.place}` : 'Not near a named street'
   $('where-next').disabled = false
+  locateSoon(lat, lng)
 }
 
 $('locate').addEventListener('click', () => {
@@ -187,7 +212,7 @@ $('street-list').addEventListener('click', (e) => {
   const street = state.town.streets.find((s) => s.name === btn.dataset.street)
   closeSearch()
   map.setView(street.point, 17, { animate: false })
-  setPin(street.point[0], street.point[1], street.name)
+  setPin(street.point[0], street.point[1])
 })
 
 $('where-next').addEventListener('click', async () => {
@@ -252,7 +277,9 @@ $('nearby-list').addEventListener('click', async (e) => {
     show('metoo')
   } catch (err) {
     card.querySelector('[data-error]').textContent = err.message
-    btn.disabled = false
+    // Closed (409) or gone (404): tapping again would only repeat the same answer.
+    if (err.status === 409 || err.status === 404) btn.remove()
+    else btn.disabled = false
   }
 })
 $('nearby-different').addEventListener('click', () => show('photo'))
@@ -312,6 +339,7 @@ $('photo-input').addEventListener('change', async () => {
   const file = $('photo-input').files?.[0]
   $('photo-input').value = ''
   if (!file) return
+  const afterSend = document.body.dataset.step === 'sent'
   $('photo-error').textContent = ''
   $('photo-busy').hidden = false
   try {
@@ -323,8 +351,12 @@ $('photo-input').addEventListener('change', async () => {
     Object.assign(img.dataset, { width: small.width, height: small.height, bytes: small.blob.size, type: small.blob.type })
     $('photo-empty').hidden = true
     $('photo-chosen').hidden = false
+    // A different photo after the Worker refused the first one (413/415): send it to the same report.
+    if (afterSend) uploadPhoto(null)
   } catch {
-    $('photo-error').textContent = "That photo couldn't be opened. Try another one, or skip the photo."
+    const msg = "That photo couldn't be opened. Try another one, or skip the photo."
+    if (afterSend) $('photo-status').innerHTML = `<p class="field-error" role="alert">${msg}</p><button type="button" class="btn btn-secondary" id="photo-another">Take a different one</button>`
+    else $('photo-error').textContent = msg
   } finally {
     $('photo-busy').hidden = true
   }
@@ -335,7 +367,7 @@ $('photo-next').addEventListener('click', () => show('details'))
 
 /* ---- step 4: details and send ------------------------------------------------------- */
 function updateCounter() {
-  const n = $('description').value.trim().length
+  const n = codePoints($('description').value.trim())
   $('description-count').textContent = `${n} of 500`
   $('description-count').classList.toggle('over', n > 500)
 }
@@ -416,13 +448,18 @@ async function uploadPhoto(created) {
     }
     box.innerHTML = '<p class="ok" data-photo-ok>Photo added.</p>'
   } catch (e) {
-    const why = e.status >= 400 && e.status < 500 && e.status !== 401 ? `<p class="muted">${esc(e.message)}</p>` : ''
-    box.innerHTML = `<p class="field-error" role="alert">${PHOTO_FAILED}</p>${why}
-      <button type="button" class="btn btn-secondary" id="photo-retry">Try the photo again</button>`
+    // Too big or the wrong kind: the same photo would fail the same way, so offer a different one.
+    const refused = e.status === 413 || e.status === 415
+    const why = refused ? `<p class="muted">${esc(e.message)}</p>` : ''
+    const action = refused
+      ? '<button type="button" class="btn btn-secondary" id="photo-another">Take a different one</button>'
+      : '<button type="button" class="btn btn-secondary" id="photo-retry">Try the photo again</button>'
+    box.innerHTML = `<p class="field-error" role="alert">${PHOTO_FAILED}</p>${why}${action}`
   }
 }
 $('photo-status').addEventListener('click', (e) => {
   if (e.target.closest('#photo-retry')) uploadPhoto(null)
+  if (e.target.closest('#photo-another')) pickPhoto()
 })
 
 $('copy-link').addEventListener('click', async () => {

@@ -3,7 +3,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:unit": "node --test tests/unit/map-labels.test.mjs",
+    "shots": "playwright test shots.spec.mjs --project chromium-390 --project chromium-1280",
+    "shots:m1": "node tests/shots-m1.mjs",
+    "dev": "node serve.mjs 8501",
+    "negative": "node tests/negative-boundary.mjs && node tests/negative-statusleak.mjs && node tests/negative-overlay.mjs && node tests/negative-metoo.mjs && node tests/negative-attribution.mjs",
+    "negative:boundary": "node tests/negative-boundary.mjs",
+    "negative:statusleak": "node tests/negative-statusleak.mjs",
+    "negative:overlay": "node tests/negative-overlay.mjs",
+    "negative:metoo": "node tests/negative-metoo.mjs",
+    "negative:attribution": "node tests/negative-attribution.mjs"
   },
   "dependencies": {
     "@maplibre/maplibre-gl-leaflet": "0.1.4",
