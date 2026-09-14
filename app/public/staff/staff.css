@@ -16,6 +16,21 @@
 }
 .link-btn { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 800; text-decoration: underline; cursor: pointer; min-height: var(--tap); }
 .staff-loading { max-width: 1600px; margin: 0 auto; padding: 16px; }
+.nav-narrow { display: none; }
+
+/* At phone width the top bar is compact: the town and SAMPLE on one line, and the nav one row that scrolls sideways if it must. */
+@media (max-width: 759px) {
+  .staff-top-in { padding: 6px 12px; gap: 2px 12px; min-height: 0; }
+  .staff .town-name { font-size: 14px; }
+  .staff .sample-badge { font-size: 12px; padding: 0 7px; }
+  .staff-nav { flex-wrap: nowrap; width: 100%; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+  .staff-nav::-webkit-scrollbar { display: none; }
+  /* Tight enough that all five fit inside 390 without scrolling (Sign out is not clipped); each is still 44 px tall. */
+  .staff-nav .nav-item, .staff-nav .btn-plain { flex: none; white-space: nowrap; padding: 0 7px; font-size: 16px; }
+  .staff-nav .btn-plain { margin-left: auto; }
+  .nav-wide { display: none; }
+  .nav-narrow { display: inline; }
+}
 
 /* ---- sign-in ---- */
 .signin-wrap { max-width: 440px; margin: 32px auto; padding: 0 16px; }
@@ -24,6 +39,13 @@
 /* ---- board ---- */
 .staff-main { max-width: 1600px; margin: 0 auto; padding: 16px; }
 .staff-main.with-detail { padding-right: 536px; }
+.board-scroll { position: relative; }
+.board-hint { margin: 0 0 6px; font-size: 15px; font-weight: 600; color: var(--muted); }
+/* A right-edge fade while columns are hidden to the right; it takes no taps. */
+.board-scroll[data-more="true"]::after {
+  content: ''; position: absolute; top: 0; right: 0; bottom: 8px; width: 64px; pointer-events: none;
+  background: linear-gradient(to right, rgba(245, 247, 249, 0), var(--ground) 85%);
+}
 /* With the panel open at desktop width, the columns keep a readable width and the board scrolls sideways inside itself. */
 @media (min-width: 1101px) {
   .staff-main.with-detail .board { grid-template-columns: repeat(5, minmax(210px, 1fr)); overflow-x: auto; padding-bottom: 8px; }

@@ -506,3 +506,81 @@ same-crew and error-order fixes are ts1's, and join by typed reference is approv
   notestale. There are no machine paths in the log. `npm run negative` now runs all seven.
 - **I looked at:** the 1280 detail before and after (chromium, and the WebKit after), the 390 detail with "Due Wed Sep 23", and the
   1280 join confirm.
+
+## M3c — 2026-09-14 (last round)
+
+`git rebase main` onto `709b215` (my M3b merged; DECISIONS 20–21): clean.
+
+### ts1's cross-review of my M3, fixed (DONE)
+1. **Medium, DECISIONS 21: the town-office screenshot test picked "last week" from a UTC date.** `shots.spec.mjs` now reads the
+   current week from `GET /api/staff/report/weekly` and uses `shiftDate(week_start, -7)`, like `report-week.spec`. I grepped every
+   spec and `helpers.mjs` for NL dates or weeks worked out from UTC or `Date.now()`:
+   - That was the only one.
+   - The others (`overdue`, `map`, `shots`' `days(n)`) date reports as offsets from now and only depend on how many days have passed.
+   - `shiftDate` only ever shifts a `week_start` the API returned.
+   - After the fix, no `toISOString().slice(0, 10)` or `Date.now() - 7 days` week is left in any spec.
+2. **`report-week.spec` no longer races the real clock.**
+   - **This week:** read before arranging and again after the UI loads; the label and `data-week` may equal either.
+   - **Previous week:** its numbers come from API answers read just before the tap and just after the UI shows that week.
+   - **Fixed and moving numbers:** opened, closed and averages of a past week can't change, so they are compared exactly. Open now,
+     overdue now and oldest open may equal either read.
+   - **The CSV:** fetched from the API just before and just after the download; the file's text and filename must equal one of them.
+3. **Signed-out error paths:** the CSV, Settings save, crew change and Change PIN error paths no longer throw once the sign-in screen
+   has replaced the view (the M3b pattern: check the target still exists).
+   - **Spec** `staff.spec` "Save settings, Add crew, Change PIN and Download CSV after the session ended go to sign-in without a page
+     error". For each action it ends the page's own session through the API, gets the 401 and "Sign in again.", and signs in again.
+     At the end there must be no page error and no console error other than the browser's "Failed to load resource".
+   - **Proof the spec can fail** (one-off, through the same control library, log line 1475): a copy with the unguarded
+     `$('csv-error').textContent` write. The unbroken copy passed; the broken copy went red with `pageerror: Cannot set properties of
+     null (setting 'textContent')`.
+4. **Deactivate / Reactivate send the name as typed in the box,** so a name typed without pressing Rename is kept. **Spec**
+   (`settings.spec`): type a new name for crew 2, press Deactivate → the box keeps it and the API holds that name with `active: false`.
+5. **Weekly report "this week" and refresh.**
+   - Every Previous / Next asks for this week again (`weekly('')`) alongside the requested week, so Next is never stuck on an old week
+     after NL Monday 00:00. **Spec:** the requests made on Previous include the shifted week and one with no `week`; Next is enabled,
+     then disabled again back on this week.
+   - A save refreshes the weekly report when that's the view. **Spec:** open a report from Oldest open, mark it Done → "Open now" goes
+     from 2 to 1 and the report leaves the list.
+6. Finding 6: no change (DECISIONS 20).
+
+### Lead polish (DONE)
+- **(a) Averages always show one decimal** ("2.0", "2.1"; "–" when nothing closed). `report-week.spec` expects `toFixed(1)`. Seen in
+  `chromium-1280-staff-7-weekly-report.png` ("Fallen tree 2.0").
+- **(b) The staff top bar at 390 is one row.** The town name and SAMPLE fit on one line (14 px); below them the nav is one row: Board,
+  Map, Report (the phone label for Weekly report), Settings and Sign out. The row can scroll sideways if a font runs wide, but at 390 it
+  fits.
+  - **Spec** (`targets.spec`, @phone, chromium and WebKit):
+    - all five items share one top edge, and the brand is under 34 px tall;
+    - the nav's `scrollWidth` ≤ `clientWidth`, so nothing is cut off;
+    - each item is at least 44 × 44 px and hit-tests to itself;
+    - there is no sideways page scroll, and every view opens from the bar.
+  - **A fault my own look found:** the first version clipped Sign out a few pixels at the edge (a sideways scroll was needed). The
+    tighter padding and the "fits" assertion came from that.
+  - Seen in `chromium-390-staff-2-board.png` and `webkit-390-staff-2-board.png`.
+- **(c) The board says it scrolls sideways:** with the detail open at 1101 px and wider, the line "Scroll the board sideways for more
+  columns." appears above the board, and a 64 px right-edge fade (takes no taps) sits over the hidden columns. Both go away once the
+  last column is in view, or when the panel closes.
+  - **Spec** (`staff.spec`, @desktop, chromium and WebKit):
+    - no hint while all five columns fit;
+    - after opening a card: the hint, `data-more="true"`, a gradient `::after`, and Won't fix not fully in view;
+    - after a real `mouse.wheel(3000, 0)` over the board: no hint, no fade, and Won't fix fully in view;
+    - after Close: no hint.
+  - Seen in `chromium-1280-staff-3-detail.png`.
+
+### Verified
+- **Final full run on the committed code, all four projects on 8503** (4.7 min), pass / fail / skip per project:
+  - chromium-390: **42 / 0 / 0**
+  - chromium-1280: **40 / 0 / 0**
+  - webkit-390: **42 / 0 / 0**
+  - webkit-1280: **40 / 0 / 0**
+
+  **164 of 164.** The run before the nav fix was also 164 of 164; the "fits" assertion was added with the fix. Every screenshot was
+  re-shot in the final run (84, 21 per project).
+- **All seven app negative controls on 8506, on the final code** (`app/tests/negative-control.log` lines 1520–1836): boundary,
+  statusleak, overlay, metoo, attribution, overdue, notestale. Each unbroken copy passed, each broken copy went red. There are no
+  machine paths in the log.
+- **I looked at:** the 390 board top bar (chromium, and WebKit after the fix), the 1280 detail with the hint and fade, the 1280 weekly
+  report with one-decimal averages, and the WebKit 390 map.
+
+### Left
+- Nothing asked for in M3c is open. The app mock (`?mock=1`) still has no staff routes; no spec uses it.

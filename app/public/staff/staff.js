@@ -30,7 +30,7 @@ const ageText = (n) => (n === 0 ? 'Today' : plural(n, 'day'))
 const others = (n) => `+${n} ${n === 1 ? 'other' : 'others'} reported this`
 const options = (list, value) => list.map(([k, l]) => `<option value="${esc(k)}"${String(k) === String(value) ? ' selected' : ''}>${esc(l)}</option>`).join('')
 const shiftDate = (ymd, days) => new Date(Date.parse(`${ymd}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10)
-const avgText = (v) => (v === null || v === undefined ? '–' : String(v))
+const avgText = (v) => (v === null || v === undefined ? '–' : Number(v).toFixed(1))
 
 async function copyText(input, button, done = 'Copied') {
   try {
@@ -45,6 +45,7 @@ async function copyText(input, button, done = 'Copied') {
 /* ---- start, sign-in, views --------------------------------------------------------------- */
 window.addEventListener(SIGNED_OUT, (e) => showSignin(e.detail || 'Sign in again.'))
 window.addEventListener('hashchange', () => { if (staffSession.get()) showView() })
+window.addEventListener('resize', () => updateBoardHint())
 
 async function start() {
   try {
@@ -160,6 +161,7 @@ const filterQuery = () => {
 function refreshView() {
   if ($('board')) loadBoard()
   if (cluster) loadMap()
+  if ($('report-body') && state.week) loadReport(state.week)
 }
 
 /* ---- board ------------------------------------------------------------------------------------ */
@@ -170,13 +172,15 @@ async function showBoard() {
       ${filtersHtml()}
       <p class="field-error" id="board-error" role="alert"></p>
       <div class="col-tabs" id="col-tabs" aria-label="Show a column"></div>
-      <div class="board" id="board"></div>
+      <p class="board-hint" id="board-hint" hidden>Scroll the board sideways for more columns.</p>
+      <div class="board-scroll" id="board-scroll"><div class="board" id="board"></div></div>
     </main>`
   wireFilters(loadBoard)
   $('board').addEventListener('click', (e) => {
     const card = e.target.closest('[data-id]')
     if (card) openDetail(Number(card.dataset.id))
   })
+  $('board').addEventListener('scroll', () => updateBoardHint(), { passive: true })
   $('col-tabs').addEventListener('click', (e) => {
     const tab = e.target.closest('[data-col]')
     if (tab) { state.column = tab.dataset.col; renderBoard() }
@@ -211,6 +215,17 @@ function card(r) {
     </button>`
 }
 
+// With the panel open at desktop width the board scrolls sideways inside itself: say so, and fade its right edge, until the last
+// column is in view.
+function updateBoardHint() {
+  const board = $('board')
+  const hint = $('board-hint')
+  if (!board || !hint) return
+  const more = board.scrollWidth > board.clientWidth + 2 && board.scrollLeft + board.clientWidth < board.scrollWidth - 2
+  hint.hidden = !more
+  $('board-scroll').dataset.more = String(more)
+}
+
 function renderBoard() {
   if (!$('board') || !state.list) return
   const { counts, requests } = state.list
@@ -226,6 +241,7 @@ function renderBoard() {
   }).join('')
   $('board').dataset.loaded = String(loadSeq)
   app.dataset.view = 'board'
+  updateBoardHint()
 }
 
 /* ---- map -------------------------------------------------------------------------------------- */
@@ -317,9 +333,10 @@ async function loadReport(week) {
   const seq = ++loadSeq
   $('report-error').textContent = ''
   try {
-    const r = await api.staff.weekly(week || '')
+    // "This week" is asked for again every time, so Next week is not stuck after NL Monday 00:00 with the page left open.
+    const [r, current] = await Promise.all([api.staff.weekly(week || ''), week ? api.staff.weekly('') : null])
     if (seq !== loadSeq || !$('report-body')) return
-    if (!week) state.thisWeek = r.week_start
+    state.thisWeek = (current || r).week_start
     state.week = r.week_start
     renderReport(r)
     app.dataset.view = 'report'
@@ -374,7 +391,7 @@ async function downloadCsv() {
     a.click()
     setTimeout(() => { URL.revokeObjectURL(url); a.remove() }, 1000)
   } catch (e) {
-    $('csv-error').textContent = e.message
+    if ($('csv-error')) $('csv-error').textContent = e.message // gone if the session ended and sign-in is showing
   } finally {
     btn.disabled = false
   }
@@ -484,7 +501,8 @@ async function saveSettings() {
     $('settings-ok').textContent = 'Saved.'
   } catch (e) {
     const target = e.field?.startsWith('sla_days.') ? $(`err-sla-${e.field.slice(9)}`) : e.field ? $(`err-${e.field}`) : null
-    ;(target || $('settings-error')).textContent = e.message
+    const box = target || $('settings-error')
+    if (box) box.textContent = e.message // gone if the session ended and sign-in is showing
   } finally {
     btn.disabled = false
   }
@@ -497,12 +515,13 @@ async function crewChange(id, run) {
     await run()
     await loadCrews()
     const list = $('crew-list')
+    if (!list) return
     list.innerHTML = crewsHtml()
     // Counts re-draws, so a reader (a test) can tell the list it holds is the one after this change.
     list.dataset.rendered = String(Number(list.dataset.rendered || 0) + 1)
     if (!id) $('crew-new').value = ''
   } catch (e) {
-    err.textContent = e.message
+    if ($('crew-list')) err.textContent = e.message // gone if the session ended and sign-in is showing
   }
 }
 
@@ -519,7 +538,7 @@ async function changePin() {
   } catch (e) {
     // A wrong current PIN is a 401 WITH field current_pin: a form error, not a lost session (API.md clarification 17).
     const target = e.field === 'current_pin' || e.field === 'new_pin' ? $(`err-${e.field}`) : $('pin-error')
-    target.textContent = e.message
+    if (target) target.textContent = e.message // gone if the session ended and sign-in is showing
   } finally {
     btn.disabled = false
   }
@@ -541,7 +560,8 @@ app.addEventListener('click', (e) => {
   const toggle = t.dataset.crewToggle
   if (toggle) {
     const crew = state.crews.find((c) => c.id === Number(toggle))
-    return crewChange(crew.id, () => api.staff.updateCrew(crew.id, { name: crew.name, active: !crew.active }))
+    // The name as typed in the box, so a new name typed without pressing Rename is not thrown away.
+    return crewChange(crew.id, () => api.staff.updateCrew(crew.id, { name: $(`crew-name-${crew.id}`).value, active: !crew.active }))
   }
 })
 
@@ -568,6 +588,7 @@ function closeDetail(render = true) {
   panel.innerHTML = ''
   $('staff-main')?.classList.remove('with-detail')
   if (render) renderBoard()
+  updateBoardHint()
 }
 
 function historyHtml(d) {

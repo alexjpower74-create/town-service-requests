@@ -100,3 +100,18 @@ test('change the PIN, sign out, the old PIN is refused and the new one works', a
   expect((await accepted).status()).toBe(200)
   await expect(page.locator('#app')).toHaveAttribute('data-view', 'board')
 })
+
+test('Deactivate keeps a crew name that was typed but not yet saved', async ({ page, request }) => {
+  const token = await staffToken(request)
+  await signIn(page)
+  await goView(page, 'settings')
+  const list = page.locator('#crew-list')
+  await replaceText(page, page.locator('#crew-name-2'), 'Water crew, north end (SAMPLE)', 'crew 2 name')
+  const before = await list.getAttribute('data-rendered')
+  await tap(page, page.locator('[data-crew-toggle="2"]'), 'Deactivate (without Rename)')
+  await expect(list).not.toHaveAttribute('data-rendered', before)
+  await expect(page.locator('.crew-row[data-crew-id="2"]')).toHaveAttribute('data-active', 'false')
+  await expect(page.locator('#crew-name-2')).toHaveValue('Water crew, north end (SAMPLE)')
+  const crew = (await api(request, 'GET', '/api/staff/crews', { token })).body.crews.find((c) => c.id === 2)
+  expect(crew).toMatchObject({ name: 'Water crew, north end (SAMPLE)', active: false })
+})

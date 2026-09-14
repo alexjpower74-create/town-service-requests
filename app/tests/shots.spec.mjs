@@ -4,7 +4,7 @@
 // are viewport captures (a full-page capture resizes the viewport faster than a map canvas follows).
 import {
   test, expect, tap, tapAt, typeText, choosePhoto, api, makeRequest, meToo, north, staffToken, staffPut, mergeInto, putPhoto,
-  signIn, openCard, goView, shot, statusPath, useStreetStyle, mapReady, POINTS,
+  signIn, openCard, goView, shot, statusPath, useStreetStyle, mapReady, shiftDate, POINTS,
 } from './helpers.mjs'
 
 const settle = (page) => page.waitForTimeout(400)
@@ -104,7 +104,9 @@ test('screenshots: the town office @shots', async ({ page, context, request }, t
   const benchDup = await makeRequest(request, { category: 'other', point: at(-810), at: days(2), description: 'Park bench is broken (SAMPLE)' })
   await mergeInto(request, token, benchDup.id, bench.id)
   // A few more reports last week, so the weekly report has numbers.
-  const lastWeek = (await api(request, 'GET', `/api/staff/report/weekly?week=${new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10)}`, { token })).body
+  // "Last week" is the API's own current NL week minus 7 days, never a UTC date (DECISIONS 21).
+  const thisWeek = (await api(request, 'GET', '/api/staff/report/weekly', { token })).body
+  const lastWeek = (await api(request, 'GET', `/api/staff/report/weekly?week=${shiftDate(thisWeek.week_start, -7)}`, { token })).body
   const lw = (h) => new Date(Date.parse(lastWeek.start_at) + h * 3_600_000).toISOString()
   for (const [category, m, open, close] of [['pothole', 900, 10, 60], ['streetlight', -900, 30, 90], ['water', 1100, 50, null], ['tree', -1100, 70, 140]]) {
     const r = await makeRequest(request, { category, point: at(m), at: lw(open) })
