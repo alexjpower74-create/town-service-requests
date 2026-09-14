@@ -281,7 +281,9 @@ async function createRequest (ctx) {
   const point = [body.lat, body.lng]
   const statusKey = randomKey()
   const photo = body.has_photo ? 'waiting' : 'none'
-  const bySubmission = 'SELECT id FROM requests WHERE submission_id = ?'
+  // The rows that belong to the new request find it by its fresh random status key, never by submission_id: only the
+  // lookup above and the UNIQUE constraint decide whether a send is a duplicate.
+  const byKey = 'SELECT id FROM requests WHERE status_key = ?'
   const created = H.created()
   const statements = [
     db.prepare(`INSERT INTO requests (id, submission_id, category, lat, lng, ward, location_label, description, reporter_name,
@@ -290,18 +292,18 @@ async function createRequest (ctx) {
       .bind(body.submission_id, body.category, body.lat, body.lng, wardOf(point, TOWN.wards), locationLabel(point, TOWN.streets),
         v.description, v.name, v.phone, photo, statusKey, at, at),
     db.prepare(`INSERT INTO request_history (request_id, at, kind, public_text, staff_text, internal)
-      SELECT id, ?, ?, ?, ?, ? FROM (${bySubmission})`)
-      .bind(at, created.kind, created.public_text, created.staff_text, created.internal, body.submission_id)
+      SELECT id, ?, ?, ?, ?, ? FROM (${byKey})`)
+      .bind(at, created.kind, created.public_text, created.staff_text, created.internal, statusKey)
   ]
   if (body.device_id) {
-    statements.push(db.prepare(`INSERT INTO metoo_devices (request_id, device_id, reporter, at) SELECT id, ?, 1, ? FROM (${bySubmission})`)
-      .bind(body.device_id, at, body.submission_id))
+    statements.push(db.prepare(`INSERT INTO metoo_devices (request_id, device_id, reporter, at) SELECT id, ?, 1, ? FROM (${byKey})`)
+      .bind(body.device_id, at, statusKey))
   }
   let upload = null
   if (body.has_photo) {
     upload = { token: randomKey(), expiresAt: iso(ctx.now + UPLOAD_TOKEN_MS) }
-    statements.push(db.prepare(`INSERT INTO upload_tokens (token_hash, request_id, created_at, expires_at) SELECT ?, id, ?, ? FROM (${bySubmission})`)
-      .bind(await sha256Hex(upload.token), at, upload.expiresAt, body.submission_id))
+    statements.push(db.prepare(`INSERT INTO upload_tokens (token_hash, request_id, created_at, expires_at) SELECT ?, id, ?, ? FROM (${byKey})`)
+      .bind(await sha256Hex(upload.token), at, upload.expiresAt, statusKey))
   }
   try {
     await db.batch(statements)
