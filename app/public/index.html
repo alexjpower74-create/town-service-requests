@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>Report a problem to the town</title>
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/vendor/maplibre/maplibre-gl.css">
+  <link rel="stylesheet" href="/theme.css">
+  <link rel="stylesheet" href="/style.css">
+  <script defer src="/vendor/leaflet/leaflet.js"></script>
+  <script defer src="/vendor/maplibre/maplibre-gl.js"></script>
+  <script defer src="/vendor/maplibre/leaflet-maplibre-gl.js"></script>
+  <script type="module" src="/report.js"></script>
+</head>
+<body>
+  <header class="topbar"><div class="topbar-in" id="brand"><div class="brand"><span class="town-name" data-town-name>Report a problem to the town</span></div></div></header>
+  <main class="wrap">
+    <aside class="emergency" id="emergency" hidden>
+      <p>Water main break or danger right now? Call the town at <a id="emergency-phone" href="tel:">…</a> or <a href="tel:911">911</a>.</p>
+    </aside>
+    <p class="field-error" id="load-error" role="alert"></p>
+    <p class="loading" id="loading">Loading…</p>
+
+    <!-- Step 1: what -->
+    <section id="step-home" data-step hidden>
+      <h1 tabindex="-1">What's the problem?</h1>
+      <div class="cats" id="cats"></div>
+      <section id="mine" hidden>
+        <h2>Your reports on this phone</h2>
+        <ul class="mine-list" id="mine-list"></ul>
+      </section>
+    </section>
+
+    <!-- Step 2: where -->
+    <section id="step-where" data-step hidden>
+      <div class="stepbar"><button type="button" class="back" data-back="home"><span class="back-icon"></span>Back</button><span class="stepline">Step 2 of 4</span></div>
+      <h1 tabindex="-1">Where is it?</h1>
+      <p class="chosen" data-chosen></p>
+      <p>Tap the map where the problem is.</p>
+      <div class="btn-row map-tools">
+        <button type="button" class="btn btn-secondary" id="locate">Use my location</button>
+        <button type="button" class="btn btn-secondary" id="search-open" aria-expanded="false" aria-controls="search">Search a street</button>
+      </div>
+      <div class="search" id="search" hidden>
+        <label class="field-label" for="street-q">Street name</label>
+        <input class="field" id="street-q" type="search" autocomplete="off" autocapitalize="words" spellcheck="false">
+        <ul class="search-list" id="street-list"></ul>
+      </div>
+      <p class="muted" id="where-note" aria-live="polite"></p>
+      <div class="map" id="map" role="application" aria-label="Map of the town. Tap where the problem is."></div>
+      <p class="where-label" id="where-label" aria-live="polite"></p>
+      <p class="field-error" id="where-error" role="alert"></p>
+      <div class="actions"><button type="button" class="btn btn-primary" id="where-next" disabled>Next</button></div>
+    </section>
+
+    <!-- Step 2, when the API finds open reports of the same kind close by -->
+    <section id="step-nearby" data-step hidden>
+      <div class="stepbar"><button type="button" class="back" data-back="where"><span class="back-icon"></span>Back</button><span class="stepline">Step 2 of 4</span></div>
+      <h1 tabindex="-1">Already reported nearby</h1>
+      <p>Is it one of these? Tap <strong>Me too</strong> and we'll add you to it instead of making a new report.</p>
+      <div id="nearby-list"></div>
+      <div class="actions"><button type="button" class="btn btn-secondary" id="nearby-different">No, mine is different</button></div>
+    </section>
+
+    <!-- After "Me too" -->
+    <section id="step-metoo" data-step hidden>
+      <h1 tabindex="-1">Thanks</h1>
+      <p class="status-sentence" id="metoo-text"></p>
+      <p>Save this link to check on it.</p>
+      <div class="stack">
+        <a class="btn btn-primary" id="metoo-open" href="#">Open the status page</a>
+        <button type="button" class="btn btn-secondary" data-restart>Back to the start</button>
+      </div>
+    </section>
+
+    <!-- Step 3: photo -->
+    <section id="step-photo" data-step hidden>
+      <div class="stepbar"><button type="button" class="back" data-back="photo-back"><span class="back-icon"></span>Back</button><span class="stepline">Step 3 of 4</span></div>
+      <h1 tabindex="-1">Add a photo</h1>
+      <p class="chosen" data-chosen></p>
+      <input class="visually-hidden" id="photo-input" type="file" accept="image/*" tabindex="-1" aria-hidden="true">
+      <div id="photo-empty" class="stack">
+        <p>A photo helps the crew find it. You can take one now or pick one from your phone.</p>
+        <button type="button" class="btn btn-primary" id="photo-add">Add a photo</button>
+        <button type="button" class="btn btn-secondary" id="photo-skip">Skip the photo</button>
+      </div>
+      <p class="muted" id="photo-busy" hidden>Getting the photo ready…</p>
+      <div id="photo-chosen" class="stack" hidden>
+        <img class="photo-preview" id="photo-preview" alt="The photo you picked">
+        <button type="button" class="btn btn-primary" id="photo-next">Next</button>
+        <button type="button" class="btn btn-secondary" id="photo-change">Take a different one</button>
+        <button type="button" class="btn btn-secondary" id="photo-remove">Skip the photo</button>
+      </div>
+      <p class="field-error" id="photo-error" role="alert"></p>
+    </section>
+
+    <!-- Step 4: details -->
+    <section id="step-details" data-step hidden>
+      <div class="stepbar"><button type="button" class="back" data-back="photo"><span class="back-icon"></span>Back</button><span class="stepline">Step 4 of 4</span></div>
+      <h1 tabindex="-1">Tell us about it</h1>
+      <p class="chosen" data-chosen></p>
+      <label class="field-label" for="description">What's wrong? <span class="muted" id="description-optional">(optional)</span></label>
+      <textarea class="field" id="description" rows="4" aria-describedby="description-count description-error"></textarea>
+      <p class="counter" id="description-count">0 of 500</p>
+      <p class="field-error" id="description-error" role="alert"></p>
+      <fieldset>
+        <legend>So we can call you back (optional)</legend>
+        <label class="field-label" for="name">Your name</label>
+        <input class="field" id="name" type="text" autocomplete="name" aria-describedby="name-error">
+        <p class="field-error" id="name-error" role="alert"></p>
+        <label class="field-label" for="phone">Phone number</label>
+        <input class="field" id="phone" type="tel" inputmode="tel" autocomplete="tel" aria-describedby="phone-error">
+        <p class="field-error" id="phone-error" role="alert"></p>
+      </fieldset>
+      <p class="field-error" id="send-error" role="alert"></p>
+      <div class="actions"><button type="button" class="btn btn-primary" id="send">Send report</button></div>
+    </section>
+
+    <!-- Report sent -->
+    <section id="step-sent" data-step hidden>
+      <h1 tabindex="-1">Report sent</h1>
+      <p class="ref-big" id="sent-ref"></p>
+      <p id="sent-what"></p>
+      <div class="photo-status" id="photo-status" aria-live="polite"></div>
+      <h2>Save this link to check on it</h2>
+      <label class="visually-hidden" for="sent-link">Status link</label>
+      <input class="field link-field" id="sent-link" type="text" readonly>
+      <div class="stack actions">
+        <button type="button" class="btn btn-secondary" id="copy-link">Copy link</button>
+        <a class="btn btn-primary" id="open-status" href="#">Open the status page</a>
+      </div>
+      <p class="note">Nothing is texted or emailed. Keep this link, or come back to this page on this phone, to see what the town is doing about it.</p>
+      <button type="button" class="btn btn-secondary" data-restart>Report something else</button>
+    </section>
+  </main>
+</body>
+</html>
