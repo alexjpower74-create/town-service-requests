@@ -1,7 +1,21 @@
 # Deploying Town Service Requests
 
-Nothing has been deployed. Everything so far ran on one computer with `wrangler dev --local`. These are the steps for when Alexander
-decides to put it online for a real town. Each step is his call; none of them has been run.
+## Prototype deploy, 2026-09-15 (Alexander's go)
+
+| Created | Value |
+|---|---|
+| Worker | `town-service-requests` → <https://town-service-requests.alexjpower74.workers.dev> (serves `/api/*` and the pages) |
+| D1 | `town-service-requests`, id `a7c3423c-6851-4dae-9fc5-88f193e16a9d`, migrations 0001 + 0002 applied `--remote` |
+| R2 | **not created**: `wrangler r2 bucket create` answered "Please enable R2 through the Cloudflare Dashboard [code 10042]". The top-level R2 block stays for local dev and tests; the `[env.prototype]` block leaves it out, and the Worker refuses photo uploads with 503 and keeps the report. Enable R2, create the bucket, add the r2_buckets block to `env.prototype`, redeploy. |
+| Secrets / vars | none. `TEST_MODE` is not set: `/api/test/reset` and `/api/test/seed` answer 404 live. |
+| SAMPLE data | 24 requests (+ history, me-toos) seeded on a local `wrangler dev` with TEST_MODE, dumped with sqlite3 and imported with `wrangler d1 execute town-service-requests --remote --file seed.sql`. No photos (no R2). |
+| Prototype line | every page shows "Prototype: a sample town, not a live service." under the town bar. |
+
+Redeploy: `cd worker && npx wrangler deploy --env prototype` (the `prototype` env in `wrangler.toml` has no R2 binding; plain `wrangler deploy` would fail on the missing bucket). Smoke: `curl -s https://town-service-requests.alexjpower74.workers.dev/api/town` answers the SAMPLE town; `curl -s -o /dev/null -w '%{http_code}' -X POST https://town-service-requests.alexjpower74.workers.dev/api/test/reset` answers 404.
+
+## For a real town
+
+These are the steps for when a real town wants it. Each is Alexander's call.
 
 ## What it needs
 
@@ -30,7 +44,7 @@ decides to put it online for a real town. Each step is his call; none of them ha
    guarantees can self-host OpenFreeMap or point `MAP_STYLE_URL` at a paid provider.
 6. **Emails and texts.** v1 sends nothing: staff copy the update text. Texting residents would need an SMS account (a v2 decision).
 
-## Deploy commands (for later, not tonight)
+## Deploy commands
 
 ```sh
 cd worker

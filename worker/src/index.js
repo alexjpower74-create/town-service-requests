@@ -371,6 +371,8 @@ async function uploadPhoto (ctx, id) {
     throw new HttpError(415, 'unsupported_photo', "That kind of file can't be used. Take a photo or pick a JPEG or PNG.")
   }
   if (row.photo === 'stored') return json(200, { photo: 'stored', duplicate: true })
+  // The prototype deploy has no R2 bucket yet (R2 is not enabled on the account); the report is kept, only the photo is refused.
+  if (!ctx.env.PHOTOS) throw new HttpError(503, 'photos_unavailable', 'Photos are not available in this prototype. Your report was still sent.')
 
   const key = randomKey()
   await ctx.env.PHOTOS.put(key, bytes, { httpMetadata: { contentType } })
@@ -482,7 +484,7 @@ async function publicStatus (ctx, key) {
 
 async function getPhoto (ctx, key) {
   const row = key === null ? null : await ctx.db.prepare('SELECT * FROM photos WHERE photo_key = ?').bind(key).first()
-  const object = row && await ctx.env.PHOTOS.get(key)
+  const object = row && ctx.env.PHOTOS && await ctx.env.PHOTOS.get(key)
   if (!object) throw notFound("We can't find that photo.")
   return new Response(object.body, {
     status: 200,
@@ -821,6 +823,7 @@ async function getSettings (ctx) {
 /** Every table wiped (rate guards included), SAMPLE settings, PIN and crews written, every photo object removed. */
 async function resetAll (ctx) {
   await ctx.db.batch(resetStatements(ctx.db))
+  if (!ctx.env.PHOTOS) return
   let cursor
   do {
     const page = await ctx.env.PHOTOS.list({ cursor })

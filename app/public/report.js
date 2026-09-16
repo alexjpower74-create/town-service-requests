@@ -450,10 +450,13 @@ async function uploadPhoto(created) {
   } catch (e) {
     // Too big or the wrong kind: the same photo would fail the same way, so offer a different one.
     const refused = e.status === 413 || e.status === 415
-    const why = refused ? `<p class="muted">${esc(e.message)}</p>` : ''
-    const action = refused
-      ? '<button type="button" class="btn btn-secondary" id="photo-another">Take a different one</button>'
-      : '<button type="button" class="btn btn-secondary" id="photo-retry">Try the photo again</button>'
+    const unavailable = e.status === 503 // the prototype deploy stores no photos; nothing to retry
+    const why = refused || unavailable ? `<p class="muted">${esc(e.message)}</p>` : ''
+    const action = unavailable
+      ? ''
+      : refused
+        ? '<button type="button" class="btn btn-secondary" id="photo-another">Take a different one</button>'
+        : '<button type="button" class="btn btn-secondary" id="photo-retry">Try the photo again</button>'
     box.innerHTML = `<p class="field-error" role="alert">${PHOTO_FAILED}</p>${why}${action}`
   }
 }

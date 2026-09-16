@@ -10,12 +10,29 @@ run_worker_first = ["/api/*"]
 [[d1_databases]]
 binding = "DB"
 database_name = "town-service-requests"
-# Placeholder for local dev. A real deploy replaces this with the id from `wrangler d1 create`.
-database_id = "00000000-0000-0000-0000-000000000000"
+# Live D1 id (created 2026-09-15); local dev keeps its own miniflare copy.
+database_id = "a7c3423c-6851-4dae-9fc5-88f193e16a9d"
 migrations_dir = "migrations"
 
+# Local dev and the tests use a local R2 (miniflare needs no account).
 [[r2_buckets]]
 binding = "PHOTOS"
 bucket_name = "town-service-requests-photos"
+
+# The live prototype: `npx wrangler deploy --env prototype`. Same Worker name, same D1, and NO R2 binding: R2 is not enabled on the
+# Cloudflare account (bucket create answered code 10042 on 2026-09-15). The Worker tolerates a missing PHOTOS binding: photo uploads
+# answer 503 and the report is kept. Once R2 is enabled and the bucket exists, add the r2_buckets block here and redeploy.
+[env.prototype]
+name = "town-service-requests"
+
+[[env.prototype.d1_databases]]
+binding = "DB"
+database_name = "town-service-requests"
+database_id = "a7c3423c-6851-4dae-9fc5-88f193e16a9d"
+migrations_dir = "migrations"
+
+[env.prototype.assets]
+directory = "../app/public"
+run_worker_first = ["/api/*"]
 
 # No TEST_MODE here, ever. Tests pass it on the command line: --var TEST_MODE:1

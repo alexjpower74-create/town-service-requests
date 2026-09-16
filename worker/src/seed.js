@@ -96,7 +96,8 @@ export async function seedDemo ({ db, env, now }) {
     let version = 1
 
     add(created, H.created())
-    if (s.photo) add(created + 2 * 60000, H.photo())
+    const photo = Boolean(s.photo && env.PHOTOS) // no R2 binding (the prototype deploy): the request is seeded without its photo
+    if (photo) add(created + 2 * 60000, H.photo())
     for (let j = 0; j < (s.metoo || 0); j++) add(created + (j + 1) * 3 * HOUR, H.meToo())
     if (s.note) add(created + 6 * HOUR, H.note(s.note))
     const end = closedAt ?? latest
@@ -134,7 +135,7 @@ export async function seedDemo ({ db, env, now }) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(id, crypto.randomUUID(), s.category, point[0], point[1], wardOf(point, TOWN.wards), locationLabel(point, TOWN.streets),
         s.description ?? null, s.name ?? null, s.phone ?? null, s.status, s.crew ?? null, s.message ?? null, plusOnes[i],
-        s.photo ? 'stored' : 'none', statusKey, s.into ?? null, iso(created), events.map(v => v.at).sort().at(-1),
+        photo ? 'stored' : 'none', statusKey, s.into ?? null, iso(created), events.map(v => v.at).sort().at(-1),
         closedAt === null ? null : iso(closedAt), version))
     for (const { at, e } of events) {
       statements.push(db.prepare('INSERT INTO request_history (request_id, at, kind, public_text, staff_text, internal) VALUES (?, ?, ?, ?, ?, ?)')
@@ -145,7 +146,7 @@ export async function seedDemo ({ db, env, now }) {
       statements.push(db.prepare('INSERT INTO metoo_devices (request_id, device_id, reporter, at) VALUES (?, ?, 0, ?)')
         .bind(id, crypto.randomUUID(), iso(clamp(created + (j + 1) * 3 * HOUR))))
     }
-    if (s.photo) {
+    if (photo) {
       const key = randomKey()
       const svg = new TextEncoder().encode(photoSvg(s.category, ref))
       await env.PHOTOS.put(key, svg, { httpMetadata: { contentType: 'image/svg+xml' } })

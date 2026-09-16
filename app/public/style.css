@@ -20,6 +20,7 @@ p { margin: 8px 0; }
 .loading { color: var(--muted); padding: 24px 0; }
 
 /* ---- emergency banner (always first) ---- */
+.prototype-note { margin: 0; padding: 6px 16px; text-align: center; font-size: 14px; color: var(--sample-ink); background: var(--sample-bg); border-bottom: 1px solid var(--sample-edge); }
 .emergency {
   background: var(--emergency-bg); color: var(--emergency-ink); border: 1px solid var(--emergency-edge); border-left-width: 6px;
   border-radius: var(--radius); padding: 8px 14px; margin: 0 0 16px; font-weight: 600;

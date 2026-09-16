@@ -10,7 +10,8 @@ Read PLAN.md first (the Rig contract), then docs/API.md (the contract between sl
 ## Stack and ports
 
 - `worker/`: Cloudflare Worker, plain JS ESM, no build, no npm deps (`wrangler` on PATH, 4.131+). D1 binding `DB`
-  (`town-service-requests`), R2 binding `PHOTOS` (`town-service-requests-photos`). Serves `/api/*` and the static app in `app/public/`.
+  (`town-service-requests`), R2 binding `PHOTOS` (`town-service-requests-photos`; local only until R2 is enabled: the `prototype` deploy env
+  has no R2 and the code tolerates a missing binding). Serves `/api/*` and the static app in `app/public/`.
 - `app/public/`: plain HTML/JS/CSS, no build. `/` resident report · `/s/?k=` public status · `/staff/` town office (PIN).
 - `app/tests/`: Playwright 1.63, chromium + webkit, 390 and 1280, against the real Worker.
 - `data/town.json`: the SAMPLE town (boundary, wards, streets from OpenFreeMap tiles). `tools/`: the lead's data tools.
@@ -21,7 +22,9 @@ Read PLAN.md first (the Rig contract), then docs/API.md (the contract between sl
 
 ## Rules that bite here
 
-- **Local only.** `wrangler dev --local`. No `wrangler deploy`, `secret put`, `d1 create`, `r2 bucket create`, `--remote`, Pages or DNS.
+- **Deploys only when Alexander says so** (he did on 2026-09-15: the prototype is live, see docs/DEPLOY.md). Day to day: `wrangler dev --local`;
+  live redeploy is `npx wrangler deploy --env prototype`. No `secret put`, Pages or DNS. Never deploy with `TEST_MODE`; the SAMPLE rows were imported with `d1 execute --remote --file`.
+- **Public repo.** Run `check-no-personal-data .` before every push; no secrets, machine names or home-folder paths.
 - **Nothing is sent.** No SMS or email. Staff get "copy this update" text; residents get a status link on screen.
 - **SAMPLE on every screen.** The town is "SAMPLE Town of Harbour Pond (demo)". Requests, crews and people are SAMPLE. Never name a
   real town as a customer. The map underneath is a real place; the app hides the tiles' town-name labels.

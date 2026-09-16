@@ -1,13 +1,21 @@
 # Town Service Requests
 
+**Prototype.** Live at <https://town-service-requests.alexjpower74.workers.dev> (SAMPLE town, not a live service; staff PIN `3690`). Nothing is
+sent (no email, no texts) and every town, person and request in it is SAMPLE.
+
 Residents of a small Newfoundland town report a problem (pothole, streetlight out, missed snow clearing, water or sewer, missed
 garbage, fallen tree, something else) with a pin on the map and an optional photo, and follow it on a status link. The town office
 works the requests from a board: assign a crew, message the public, keep internal notes, join duplicates, and see what is overdue.
 
-Built overnight 2026-09-14 as a local demo. **Nothing is deployed, nothing is sent (no email, no texts), and every town, person and
-request in it is SAMPLE.**
+Built overnight 2026-09-14; put online as a prototype on 2026-09-15 (one Cloudflare Worker + D1, seeded with 24 SAMPLE requests).
+Photos are off in the prototype: the Cloudflare account has no R2 yet, so a photo upload answers "not available" and the report is kept.
 
 ## Open it
+
+Live: <https://town-service-requests.alexjpower74.workers.dev/> (resident), <https://town-service-requests.alexjpower74.workers.dev/staff/> (town office, PIN **3690**), and every request's
+status link is in its detail on the staff board. Every screen carries a "Prototype" line and the SAMPLE badge.
+
+On this computer:
 
 ```sh
 cd ~/"Projects/Town Service Requests" && npm run demo
@@ -60,9 +68,10 @@ the control only passes when its test goes red. The QA history and every defect 
 
 ## What deploying needs
 
-Nothing has been deployed; each step is Alexander's call. Details and commands: `docs/DEPLOY.md`.
+The prototype is deployed (2026-09-15); what was created and what a real town still needs: `docs/DEPLOY.md`.
 
-- **Worker** `town-service-requests` (serves the API and the pages), **D1** `town-service-requests`, **R2** `town-service-requests-photos`.
+- **Worker** `town-service-requests` (serves the API and the pages), **D1** `town-service-requests`, **R2** `town-service-requests-photos`
+  (not yet: R2 is not enabled on the account, so the prototype runs without photos).
 - **Migrations** applied with `--remote` (deploy does not migrate).
 - **Secrets:** none. **Variables:** optional `MAP_STYLE_URL`; never `TEST_MODE`.
 - **Cron:** none (overdue and reports are computed when read). **Domain:** the town's choice; HTTPS for location and camera.
